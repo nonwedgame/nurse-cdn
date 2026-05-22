@@ -9089,7 +9089,8 @@ window.NurseExport = { exportSchedule, exportOT };
       const activeWard = window.NurseState.getActiveWard() || 'ICU Ward';
       healthWardText.innerHTML = `แผนกตึกปัจจุบัน: <span class="text-cyan-300 font-bold">${activeWard}</span>`;
       healthWardIcon.className = 'w-4 h-4 text-cyan-300';
-      healthWardIcon.setAttribute('data-lucide', 'hospital');
+      // lucide ไม่มี 'hospital' — ใช้ 'building-2' แทน (ตึก)
+      healthWardIcon.setAttribute('data-lucide', 'building-2');
     }
 
     // Stats

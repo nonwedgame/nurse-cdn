@@ -11796,6 +11796,8 @@ window.onMonthChange = onMonthChange;
     nurses: cmdNurses, registry: cmdNurses, // alias
     leave: cmdLeave,
     print: cmdPrint, generate: cmdGenerate, auto: cmdGenerate,
+    // Phase 1
+    whoison: cmdWhoIsOn, count: cmdCount, month: cmdMonth,
   };
 
   function header() {
@@ -11851,6 +11853,9 @@ window.onMonthChange = onMonthChange;
 • /myot — OT ของฉัน
 • /nurses — ทะเบียนพยาบาล
 • /find ชื่อ — ค้นหาคน
+• /whoison — ใครเข้าเวรตอนนี้
+• /count [ช|บ|ด] — นับเวรของฉันเดือนนี้
+• /month [YYYY-MM] — สรุปเดือนอื่น
 
 🔄 <b>ยื่นคำขอ</b>
 • /swap — ขอแลกเวร (3 ขั้น)
@@ -11934,6 +11939,82 @@ window.onMonthChange = onMonthChange;
       text += '\n';
     }
     return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
+  }
+
+  // ── Phase 1: /whoison /count /month ─────────────────
+  async function cmdWhoIsOn(chatId) {
+    const s = state(); const h = H();
+    if (!s) return sendMessage(chatId, '❌ ระบบยังไม่พร้อม');
+    const now = new Date();
+    if (!isCurrentMonth(now)) return sendMessage(chatId, `${header()}\n\n📅 ตารางเดือนปัจจุบันไม่ตรงกับวันนี้`);
+    const hour = now.getHours();
+    let currentShift, label;
+    if (hour >= 8 && hour < 16)       { currentShift = 'ช'; label = '🌅 เช้า (08:00–16:00)'; }
+    else if (hour >= 16 && hour < 24) { currentShift = 'บ'; label = '🌇 บ่าย (16:00–24:00)'; }
+    else                              { currentShift = 'ด'; label = '🌙 ดึก (00:00–08:00)'; }
+    const d = now.getDate();
+    const onDuty = [];
+    s.nurses.filter(n => n.active !== false).forEach(n => {
+      const c = h.getShift(n.id, d);
+      if (c && c.indexOf(currentShift) !== -1) onDuty.push(n.name);
+    });
+    let text = `${header()}\n\n👥 <b>เวรขณะนี้ (${d}/${s.month})</b>\n${label}\n\n`;
+    if (!onDuty.length) text += '❌ <i>ไม่มีคนเข้าเวร</i>';
+    else text += onDuty.map(n => `• ${escHtml(n)}`).join('\n');
+    return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [
+      [{text:'🔄 รีเฟรช', callback_data:'cmd:whoison'}, {text:'🏠 เมนู', callback_data:'cmd:menu'}]
+    ]}});
+  }
+
+  async function cmdCount(chatId, msg, args) {
+    const nurse = getPairedNurse(chatId);
+    if (!nurse) return sendMessage(chatId, `${header()}\n\n⚠️ ต้องผูกบัญชีก่อน — /pair ชื่อ-นามสกุล`);
+    const s = state(); const h = H();
+    const days = h.daysInMonth(s.year, s.month);
+    const count = { 'ช':0,'บ':0,'ด':0,'ชบ':0,'ดบ':0,'ชด':0 };
+    for (let d = 1; d <= days; d++) {
+      const c = h.getShift(nurse.id, d);
+      if (c && count[c] !== undefined) count[c]++;
+    }
+    const codeArg = (args || '').trim();
+    if (codeArg) {
+      if (count[codeArg] === undefined) return sendMessage(chatId, `${header()}\n\n❓ รหัสเวรไม่ถูกต้อง (ใช้: ช, บ, ด, ชบ, ดบ, ชด)`);
+      return sendMessage(chatId, `${header()}\n\n📊 <b>${escHtml(nurse.name)}</b> มีเวร <b>${codeArg}</b> = ${count[codeArg]} วัน (${s.month}/${s.year})`);
+    }
+    const total = Object.values(count).reduce((a,b)=>a+b,0);
+    const text = `${header()}\n\n📊 <b>นับเวร — ${escHtml(nurse.name)}</b>\nเดือน ${s.month}/${s.year} (รวม ${total} วัน)\n\n` +
+      `🌅 ช = ${count['ช']}\n🌇 บ = ${count['บ']}\n🌙 ด = ${count['ด']}\n` +
+      `🌅🌇 ชบ = ${count['ชบ']}\n🌙🌇 ดบ = ${count['ดบ']}\n🌅🌙 ชด = ${count['ชด']}`;
+    return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
+  }
+
+  async function cmdMonth(chatId, msg, args) {
+    const s = state(); const h = H();
+    let y = s.year, m = s.month;
+    const arg = (args || '').trim();
+    if (arg) {
+      const parts = arg.split(/[-/]/).map(x => parseInt(x, 10));
+      if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) {
+        return sendMessage(chatId, `${header()}\n\n❓ ใช้: <code>/month YYYY-MM</code> (เช่น <code>/month 2569-06</code> หรือ <code>/month 6-2569</code>)`);
+      }
+      if (parts[0] > 1900) { y = parts[0]; m = parts[1]; }
+      else { m = parts[0]; y = parts[1]; }
+      if (m < 1 || m > 12) return sendMessage(chatId, `${header()}\n\n❓ เดือนต้องอยู่ระหว่าง 1-12`);
+    }
+    if (y !== s.year || m !== s.month) {
+      return sendMessage(chatId, `${header()}\n\n📅 <b>เดือน ${m}/${y}</b>\n\n⚠️ ตอนนี้ระบบโหลดเดือน <b>${s.month}/${s.year}</b> อยู่\nกรุณาเปลี่ยนเดือนในหน้าเว็บก่อน แล้วค่อยใช้ /month`);
+    }
+    const days = h.daysInMonth(y, m);
+    const lines = [`${header()}\n\n📅 <b>สรุปเดือน ${m}/${y}</b>\n`];
+    for (let d = 1; d <= days; d++) {
+      const c = { 'ช':0,'บ':0,'ด':0 };
+      s.nurses.filter(n => n.active !== false).forEach(n => {
+        const code = h.getShift(n.id, d);
+        if (code) ['ช','บ','ด'].forEach(k => { if (code.indexOf(k) !== -1) c[k]++; });
+      });
+      lines.push(`${d}: ช${c['ช']} บ${c['บ']} ด${c['ด']}`);
+    }
+    return sendMessage(chatId, lines.join('\n'), { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
   }
 
   async function cmdMyShifts(chatId) {
@@ -13452,6 +13533,9 @@ window.onMonthChange = onMonthChange;
           { command: 'myot',      description: '💰 OT ของฉัน' },
           { command: 'nurses',    description: '📚 ทะเบียนพยาบาล' },
           { command: 'find',      description: '🔍 ค้นหาคน (find ชื่อ)' },
+          { command: 'whoison',   description: '👥 ใครเข้าเวรตอนนี้' },
+          { command: 'count',     description: '📊 นับเวรของฉันเดือนนี้' },
+          { command: 'month',     description: '🗓️ ตารางเดือนอื่น' },
           { command: 'swap',      description: '🔄 ขอแลกเวร' },
           { command: 'leave',     description: '📝 ขอลา' },
           { command: 'pair',      description: '🔗 ผูกบัญชี' },

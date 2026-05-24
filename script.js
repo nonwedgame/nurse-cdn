@@ -13300,6 +13300,15 @@ window.onMonthChange = onMonthChange;
       if (e.name !== 'AbortError') {
         activityLog('err', `poll: ${e.message}`);
         setStatus('error', 'ผิดพลาด');
+        if (/conflict|webhook is active|deleteWebhook/i.test(e.message || '')) {
+          runtime.enabled = false;
+          runtime.wasEnabled = false;
+          saveState();
+          const cb = document.getElementById('botCtlEnabled'); if (cb) cb.checked = false;
+          setStatus('off', 'Webhook');
+          window.NurseNotify?.add('warning', '⚡ Live Polling หยุดแล้ว', 'Telegram ยังมี webhook active อยู่ ให้เลือก Live Polling ใหม่เพื่อปิด webhook ก่อน');
+          return;
+        }
       }
     } finally {
       if (runtime.enabled) setTimeout(pollOnce, POLL_INTERVAL_MS);
@@ -13394,6 +13403,16 @@ window.onMonthChange = onMonthChange;
         runtime.enabled = false;
         saveState();
         if (!opts.silent) Swal.fire({ icon: 'warning', title: 'ยังไม่มี Bot Token', text: 'กรุณาตั้งค่า Token ในการ์ด Telegram Bot ก่อน' });
+        return;
+      }
+      try {
+        await tgCall('deleteWebhook', { drop_pending_updates: false });
+      } catch (e) {
+        runtime.enabled = false;
+        saveState();
+        const cb = document.getElementById('botCtlEnabled'); if (cb) cb.checked = false;
+        setStatus('error', 'Webhook');
+        if (!opts.silent) window.NurseNotify?.add('warning', 'ปิด Webhook ไม่สำเร็จ', e.message);
         return;
       }
       activityLog('cmd', opts.silent ? '🟢 เริ่มรับคำสั่ง (auto-resume)' : '🟢 เริ่มรับคำสั่ง');

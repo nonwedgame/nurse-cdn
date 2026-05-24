@@ -11798,6 +11798,8 @@ window.onMonthChange = onMonthChange;
     print: cmdPrint, generate: cmdGenerate, auto: cmdGenerate,
     // Phase 1
     whoison: cmdWhoIsOn, count: cmdCount, month: cmdMonth,
+    // Phase 2
+    remind: cmdRemind, subscribe: cmdSubscribe, quiet: cmdQuiet,
   };
 
   function header() {
@@ -11856,6 +11858,11 @@ window.onMonthChange = onMonthChange;
 • /whoison — ใครเข้าเวรตอนนี้
 • /count [ช|บ|ด] — นับเวรของฉันเดือนนี้
 • /month [YYYY-MM] — สรุปเดือนอื่น
+
+🔔 <b>แจ้งเตือน</b>
+• /remind YYYY-MM-DD HH:MM ข้อความ
+• /subscribe daily|weekly|off — สรุปอัตโนมัติ
+• /quiet HH:MM-HH:MM | off — ช่วงเงียบ
 
 🔄 <b>ยื่นคำขอ</b>
 • /swap — ขอแลกเวร (3 ขั้น)
@@ -12015,6 +12022,70 @@ window.onMonthChange = onMonthChange;
       lines.push(`${d}: ช${c['ช']} บ${c['บ']} ด${c['ด']}`);
     }
     return sendMessage(chatId, lines.join('\n'), { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
+  }
+
+  // ── Phase 2: แจ้งเตือน (ใช้ Supabase ตรงๆ) ─────────────
+  function _sb() { return window.CloudStore?.client; }
+  function _hhmmValid(s) { return /^\d{1,2}:\d{2}$/.test(s) && +s.split(':')[0] < 24 && +s.split(':')[1] < 60; }
+
+  async function cmdRemind(chatId, msg, args) {
+    const argText = (args || '').trim();
+    if (!argText) return sendMessage(chatId,
+      `${header()}\n\n📌 <b>ตั้งเตือน</b>\nรูปแบบ: <code>/remind YYYY-MM-DD HH:MM ข้อความ</code>\nเช่น <code>/remind 2026-05-25 07:30 เข้าเวรเช้า</code>`);
+    const m = argText.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})\s+(.+)$/);
+    if (!m) return sendMessage(chatId, `${header()}\n\n❓ รูปแบบไม่ถูก`);
+    const [, y, mo, d, h, mi, message] = m;
+    const fireAt = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}T${h.padStart(2,'0')}:${mi}:00+07:00`;
+    if (new Date(fireAt) <= new Date()) return sendMessage(chatId, `${header()}\n\n⚠️ เวลาที่ตั้งอยู่ในอดีต`);
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    const { error } = await sb.from('bot_reminders').insert([{ chat_id: String(chatId), fire_at: fireAt, message }]);
+    if (error) return sendMessage(chatId, `${header()}\n\n❌ ${escHtml(error.message)}`);
+    return sendMessage(chatId, `${header()}\n\n✅ <b>ตั้งเตือนเรียบร้อย</b>\n📅 ${fireAt.slice(0,16).replace('T',' ')}\n💬 ${escHtml(message)}`);
+  }
+
+  async function cmdSubscribe(chatId, msg, args) {
+    const freq = (args || '').trim();
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    if (!['daily','weekly','off','none'].includes(freq)) {
+      const { data } = await sb.from('bot_subscriptions').select('freq,send_time').eq('chat_id', String(chatId)).maybeSingle();
+      return sendMessage(chatId,
+        `${header()}\n\n📰 <b>สมาชิกสรุปเวรอัตโนมัติ</b>\nปัจจุบัน: <b>${data?.freq || 'off'}</b> @ ${data?.send_time || '07:00'}\n\n` +
+        `<code>/subscribe daily</code> — ทุกเช้า 07:00\n<code>/subscribe weekly</code> — ทุกอาทิตย์ 07:00\n<code>/subscribe off</code> — ปิด`);
+    }
+    const f = freq === 'none' ? 'off' : freq;
+    const nurse = getPairedNurse(chatId);
+    const { error } = await sb.from('bot_subscriptions').upsert({
+      chat_id: String(chatId), nurse_id: nurse?.id || null, freq: f, send_time: '07:00', updated_at: new Date().toISOString(),
+    });
+    if (error) return sendMessage(chatId, `${header()}\n\n❌ ${escHtml(error.message)}`);
+    return sendMessage(chatId, f === 'off' ? `${header()}\n\n🔕 ปิดการสมัครแล้ว` : `${header()}\n\n🔔 สมัครรับสรุป <b>${f}</b> @ 07:00`);
+  }
+
+  async function cmdQuiet(chatId, msg, args) {
+    const range = (args || '').trim();
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    const nurse = getPairedNurse(chatId);
+    if (!range) {
+      const { data } = await sb.from('bot_subscriptions').select('quiet_start,quiet_end').eq('chat_id', String(chatId)).maybeSingle();
+      const q = (data?.quiet_start && data?.quiet_end) ? `${data.quiet_start}-${data.quiet_end}` : 'ไม่ตั้งไว้';
+      return sendMessage(chatId,
+        `${header()}\n\n🤫 <b>ช่วงเงียบ</b>\nปัจจุบัน: <b>${q}</b>\n\n<code>/quiet HH:MM-HH:MM</code> เช่น <code>/quiet 22:00-06:00</code>\n<code>/quiet off</code> — ปิด`);
+    }
+    if (range === 'off') {
+      const cur = await sb.from('bot_subscriptions').select('freq').eq('chat_id', String(chatId)).maybeSingle();
+      await sb.from('bot_subscriptions').upsert({ chat_id: String(chatId), nurse_id: nurse?.id || null, freq: cur.data?.freq || 'off', quiet_start: null, quiet_end: null, updated_at: new Date().toISOString() });
+      return sendMessage(chatId, `${header()}\n\n🔔 ปิดช่วงเงียบแล้ว`);
+    }
+    const parts = range.split('-');
+    if (parts.length !== 2 || !_hhmmValid(parts[0]) || !_hhmmValid(parts[1]))
+      return sendMessage(chatId, `${header()}\n\n❓ รูปแบบ: HH:MM-HH:MM`);
+    const cur = await sb.from('bot_subscriptions').select('freq').eq('chat_id', String(chatId)).maybeSingle();
+    const { error } = await sb.from('bot_subscriptions').upsert({
+      chat_id: String(chatId), nurse_id: nurse?.id || null, freq: cur.data?.freq || 'off',
+      quiet_start: parts[0], quiet_end: parts[1], updated_at: new Date().toISOString(),
+    });
+    if (error) return sendMessage(chatId, `${header()}\n\n❌ ${escHtml(error.message)}`);
+    return sendMessage(chatId, `${header()}\n\n🤫 ตั้งช่วงเงียบ <b>${parts[0]}–${parts[1]}</b>`);
   }
 
   async function cmdMyShifts(chatId) {
@@ -13536,6 +13607,9 @@ window.onMonthChange = onMonthChange;
           { command: 'whoison',   description: '👥 ใครเข้าเวรตอนนี้' },
           { command: 'count',     description: '📊 นับเวรของฉันเดือนนี้' },
           { command: 'month',     description: '🗓️ ตารางเดือนอื่น' },
+          { command: 'remind',    description: '⏰ ตั้งเตือน' },
+          { command: 'subscribe', description: '🔔 รับสรุปอัตโนมัติ' },
+          { command: 'quiet',     description: '🤫 ช่วงเงียบ' },
           { command: 'swap',      description: '🔄 ขอแลกเวร' },
           { command: 'leave',     description: '📝 ขอลา' },
           { command: 'pair',      description: '🔗 ผูกบัญชี' },

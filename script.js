@@ -12174,11 +12174,16 @@ window.onMonthChange = onMonthChange;
 
   async function cmdStatus(chatId) {
     const s = state();
+    const paired = runtime.paired[chatId];
+    const nurse = paired ? s.nurses.find(n => n.id === paired.nurseId) : null;
     const onlineNurses = s.nurses.filter(n => n.active !== false).length;
     const pairedCount = Object.keys(runtime.paired).length;
     const pendingCount = runtime.swapRequests.filter(r => r.status === 'pending').length;
-    const text = `${header()}\n\n⚙️ <b>สถานะระบบ</b>\n\n📅 เดือน: <b>${s.month}/${s.year}</b>\n👥 บุคลากร: <b>${onlineNurses}</b> คน\n🔗 บัญชีที่ผูกแล้ว: <b>${pairedCount}</b> คน\n🔄 คำขอแลกเวรค้าง: <b>${pendingCount}</b> รายการ\n⏰ เวลาเซิร์ฟเวอร์: ${new Date().toLocaleString('th-TH')}\n\n✅ ระบบทำงานปกติ`;
-    return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
+    const meLine = paired
+      ? `👤 ผูกกับ: <b>${escHtml(nurse?.name || paired.name || '?')}</b>${paired.isAdmin ? ' 👑' : ''}`
+      : `⚠️ ยังไม่ผูกบัญชี — /pair ชื่อ`;
+    const text = `${header()}\n\n⚙️ <b>สถานะระบบ</b>\n\n🆔 Chat ID: <code>${chatId}</code>\n${meLine}\n\n📅 เดือน: <b>${s.month}/${s.year}</b>\n👥 บุคลากร: <b>${onlineNurses}</b> คน\n🔗 ผูกแล้ว: <b>${pairedCount}</b> คน\n🔄 คำขอแลกค้าง: <b>${pendingCount}</b>\n⏰ ${new Date().toLocaleString('th-TH')}\n\n✅ ระบบทำงานปกติ`;
+    return sendMessage(chatId, text);
   }
 
   async function cmdCancel(chatId) {

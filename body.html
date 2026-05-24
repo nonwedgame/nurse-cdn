@@ -663,6 +663,25 @@
                   </div>
                 </div>
                 <div class="p-5 space-y-4">
+                  <!-- Bot mode selector -->
+                  <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="botCtlModeAuto"
+                      onclick="window.NurseBotCmd?.setMode('auto')"
+                      class="botctl-btn botctl-btn-primary"
+                      title="ใช้ Apps Script Webhook ทำงาน 24/7 ไม่ต้องเปิดเว็บค้างไว้">
+                      ☁️ Auto Webhook
+                    </button>
+                    <button type="button" id="botCtlModeLive"
+                      onclick="window.NurseBotCmd?.setMode('live')"
+                      class="botctl-btn botctl-btn-ghost"
+                      title="ใช้เบราว์เซอร์ poll คำสั่ง ต้องเปิดเว็บค้างไว้ และระบบจะปิด webhook ชั่วคราว">
+                      ⚡ Live Polling
+                    </button>
+                  </div>
+                  <div id="botCtlModeHint" class="text-[10px] leading-relaxed" style="color:var(--text-muted)">
+                    Auto Webhook ทำงานผ่าน Apps Script ตลอดเวลา ส่วน Live Polling ใช้เฉพาะตอนต้องการให้หน้าเว็บรับคำสั่งเอง
+                  </div>
+
                   <!-- Master toggle -->
                   <label class="notif-toggle-row cursor-pointer" style="background:linear-gradient(135deg,rgba(14,165,233,0.05),rgba(124,58,237,0.05));border:1.5px dashed var(--border-color);">
                     <input type="checkbox" id="botCtlEnabled" class="notif-toggle-check"
@@ -3350,4 +3369,3 @@
   </div>
 
   <!-- ============== BUNDLED JAVASCRIPT ============== -->
-

@@ -13315,6 +13315,15 @@ window.onMonthChange = onMonthChange;
 
   // ── Public API ───────────────────────────────────────
   async function toggle(on, opts = {}) {
+    if (on && window.__DISABLE_BROWSER_BOT_POLLING__) {
+      runtime.enabled = false;
+      runtime.wasEnabled = false;
+      saveState();
+      const cb = document.getElementById('botCtlEnabled'); if (cb) cb.checked = false;
+      setStatus('off', 'Webhook');
+      if (!opts.silent) window.NurseNotify?.add('info', '🤖 ใช้ Webhook แล้ว', 'Bot ทำงานผ่าน Apps Script ไม่ต้องเปิดเว็บค้างไว้');
+      return;
+    }
     runtime.enabled = !!on;
     saveState();   // ⭐ persist state immediately
     if (on) {
@@ -13730,13 +13739,23 @@ window.onMonthChange = onMonthChange;
 
   function init() {
     loadState();
+    if (window.__DISABLE_BROWSER_BOT_POLLING__) {
+      runtime.enabled = false;
+      runtime.wasEnabled = false;
+      saveState();
+    }
     renderPairedUsers();
     renderPendingRequests();
     renderActivity();
     renderStats();
     setStatus('off', 'ปิดอยู่');
+    if (window.__DISABLE_BROWSER_BOT_POLLING__) {
+      const cb = document.getElementById('botCtlEnabled');
+      if (cb) cb.checked = false;
+      setStatus('off', 'Webhook');
+    }
     // ⭐ Auto-resume if was enabled before page reload
-    if (runtime.wasEnabled) {
+    if (runtime.wasEnabled && !window.__DISABLE_BROWSER_BOT_POLLING__) {
       const cb = document.getElementById('botCtlEnabled');
       if (cb) cb.checked = true;
       // Delay slightly to let NurseState load first (for token)

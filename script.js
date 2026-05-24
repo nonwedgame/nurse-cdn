@@ -13877,12 +13877,17 @@ window.onMonthChange = onMonthChange;
     }
     el.innerHTML = filtered.map(([cid, p]) => {
       const initial = (p.name||'?').trim().charAt(0);
-      const adminBadge = p.isAdmin || (entries[0] && entries[0][0] === cid) ? '<span class="botctl-admin-badge">ADMIN</span>' : '';
+      const isAdmin = !!p.isAdmin;
+      const adminBadge = isAdmin ? '<span class="botctl-admin-badge">👑 ADMIN</span>' : '';
+      const adminBtn = isAdmin
+        ? `<button class="rm" onclick="window.NurseBotCmd.revokeAdmin('${escHtml(cid)}')" title="ถอนสิทธิ์แอดมิน" style="background:rgba(251,191,36,0.15);color:#d97706;">👤</button>`
+        : `<button class="msg" onclick="window.NurseBotCmd.makeAdmin('${escHtml(cid)}')" title="ตั้งเป็นแอดมิน" style="background:rgba(245,158,11,0.15);color:#d97706;">👑</button>`;
       return `<div class="botctl-paired-item">
         <div class="botctl-avatar-sm">${escHtml(initial)}</div>
         <span class="name">${escHtml(p.name)}${adminBadge}</span>
         <span class="chatid">${escHtml(cid)}</span>
         <div class="botctl-paired-actions">
+          ${adminBtn}
           <button class="ping" onclick="window.NurseBotCmd.pingUser('${escHtml(cid)}')" title="ส่ง Ping ทดสอบ">📡</button>
           <button class="msg" onclick="window.NurseBotCmd.messageUser('${escHtml(cid)}')" title="ส่งข้อความ">💬</button>
           <button class="view" onclick="window.NurseBotCmd.viewUserShifts('${escHtml(cid)}')" title="ดูเวรของผู้ใช้นี้">📋</button>
@@ -14213,10 +14218,56 @@ window.onMonthChange = onMonthChange;
     }
   }
 
+  // ── Admin management (UI) ────────────────────────────
+  async function makeAdmin(cid) {
+    const p = runtime.paired[cid]; if (!p) return;
+    const res = await Swal.fire({
+      icon: 'question', title: `ตั้ง ${p.name} เป็นแอดมิน?`,
+      html: `ผู้ใช้นี้จะมีสิทธิ์เข้าถึง:<br>• 📊 สถิติ • 📤 Export • 📋 Audit<br>• 📢 Broadcast • 🛠️ มอบเวร • 🖨️ พิมพ์<br>• ⚙️ จัดเวรอัตโนมัติ • 👑 เมนูแอดมิน`,
+      showCancelButton: true, confirmButtonText: '👑 ยืนยัน', cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#d97706',
+    });
+    if (!res.isConfirmed) return;
+    p.isAdmin = true; saveState(); renderPairedUsers();
+    activityLog('cmd', `👑 makeAdmin → ${p.name}`);
+    // ซิงค์ไป Supabase paired_users.is_admin
+    const sb = window.CloudStore?.client;
+    if (sb) {
+      const { error } = await sb.from('paired_users').update({ is_admin: true }).eq('chat_id', cid);
+      if (error) activityLog('err', `sync admin: ${error.message}`);
+    }
+    try { await sendMessage(cid, `${header()}\n\n👑 <b>คุณได้รับสิทธิ์แอดมินแล้ว</b>\nพิมพ์ /menu เพื่อดูเมนูใหม่`); } catch (_) {}
+    window.NurseNotify?.add('success', `👑 ${p.name} เป็นแอดมินแล้ว`, '');
+  }
+
+  async function revokeAdmin(cid) {
+    const p = runtime.paired[cid]; if (!p) return;
+    const adminCount = Object.values(runtime.paired).filter(x => x.isAdmin).length;
+    if (adminCount <= 1) {
+      return Swal.fire({ icon: 'warning', title: 'ถอนไม่ได้', text: 'เหลือแอดมินคนเดียว — ตั้งคนอื่นเป็นแอดมินก่อนค่อยถอน' });
+    }
+    const res = await Swal.fire({
+      icon: 'warning', title: `ถอนสิทธิ์แอดมินของ ${p.name}?`,
+      showCancelButton: true, confirmButtonText: '👤 ถอน', cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#dc2626',
+    });
+    if (!res.isConfirmed) return;
+    p.isAdmin = false; saveState(); renderPairedUsers();
+    activityLog('cmd', `👤 revokeAdmin → ${p.name}`);
+    const sb = window.CloudStore?.client;
+    if (sb) {
+      const { error } = await sb.from('paired_users').update({ is_admin: false }).eq('chat_id', cid);
+      if (error) activityLog('err', `sync admin: ${error.message}`);
+    }
+    try { await sendMessage(cid, `${header()}\n\nℹ️ สิทธิ์แอดมินของคุณถูกถอนแล้ว`); } catch (_) {}
+    window.NurseNotify?.add('info', `👤 ถอนสิทธิ์ ${p.name} แล้ว`, '');
+  }
+
   window.NurseBotCmd = {
     init, toggle, setMode, installCommands, sendMainMenu,
     unpair, approveSwap, rejectSwap,
     pingUser, messageUser, viewUserShifts,
+    makeAdmin, revokeAdmin,
     filterPaired, exportPaired, exportRequests,
     openBroadcast, openCustomize,
     _state: runtime,

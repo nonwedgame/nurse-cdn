@@ -11800,6 +11800,8 @@ window.onMonthChange = onMonthChange;
     whoison: cmdWhoIsOn, count: cmdCount, month: cmdMonth,
     // Phase 2
     remind: cmdRemind, subscribe: cmdSubscribe, quiet: cmdQuiet,
+    // Phase 3
+    stats: cmdStats, export: cmdExport, audit: cmdAudit, reset: cmdReset,
   };
 
   function header() {
@@ -11831,7 +11833,11 @@ window.onMonthChange = onMonthChange;
 • /print — ศูนย์การพิมพ์
 • /generate — จัดเวรอัตโนมัติ
 • /broadcast — กระจายข่าวให้ทุกคน
-• /grant chatid — ให้สิทธิ์แอดมิน` : '';
+• /grant chatid — ให้สิทธิ์แอดมิน
+• /stats — สถิติรวมเดือนนี้
+• /export [YYYY-MM] — Export CSV
+• /audit [จำนวน] — Audit log
+• /reset chatid — ล้าง pending state` : '';
     const text = `${header()}\n\n❓ <b>คู่มือใช้งาน Bot</b>\n
 📅 <b>ดูตารางเวร (Text)</b>
 • /today — เวรวันนี้
@@ -12294,6 +12300,103 @@ window.onMonthChange = onMonthChange;
     activityLog('cmd', `👑 grant admin → ${runtime.paired[target].name}`);
     await sendMessage(target, `${header()}\n\n👑 <b>คุณได้รับสิทธิ์แอดมินแล้ว</b>\nพิมพ์ /admin เพื่อเข้าสู่เมนูแอดมิน`);
     return sendMessage(chatId, `✅ ให้สิทธิ์แอดมินกับ ${runtime.paired[target].name} แล้ว`);
+  }
+
+  // ── Phase 3: Admin/รายงาน ─────────────────────────────
+  async function cmdStats(chatId) {
+    if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
+    const s = state(); const h = H();
+    const days = h.daysInMonth(s.year, s.month);
+    const code = { 'ช':0,'บ':0,'ด':0,'ชบ':0,'ดบ':0,'ชด':0 };
+    const activeNurses = s.nurses.filter(n => n.active !== false);
+    activeNurses.forEach(n => {
+      for (let d = 1; d <= days; d++) {
+        const c = h.getShift(n.id, d);
+        if (c && code[c] !== undefined) code[c]++;
+      }
+    });
+    const totalShifts = Object.values(code).reduce((a,b)=>a+b,0);
+    const leaveByType = {}; let totalLeaves = 0;
+    activeNurses.forEach(n => {
+      for (let d = 1; d <= days; d++) {
+        const lv = h.getLeave(n.id, d);
+        if (lv) { leaveByType[lv] = (leaveByType[lv]||0)+1; totalLeaves++; }
+      }
+    });
+    const pairedCount = Object.keys(runtime.paired).length;
+    const adminCount = Object.values(runtime.paired).filter(p => p.isAdmin).length;
+    const text = `${header()}\n\n📊 <b>สถิติระบบ — ${s.month}/${s.year}</b>\n\n` +
+      `👥 พยาบาล: <b>${activeNurses.length}</b> คน (${pairedCount} ผูก, ${adminCount} admin)\n` +
+      `📅 เวรเดือนนี้: <b>${totalShifts}</b>\n` +
+      `  🌅 ช=${code['ช']}  🌇 บ=${code['บ']}  🌙 ด=${code['ด']}\n` +
+      `  ชบ=${code['ชบ']}  ดบ=${code['ดบ']}  ชด=${code['ชด']}\n\n` +
+      `📋 วันลา: <b>${totalLeaves}</b>\n` +
+      Object.keys(leaveByType).map(k => `  ${k} = ${leaveByType[k]}`).join('\n');
+    return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
+  }
+
+  async function cmdExport(chatId, msg, args) {
+    if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
+    const s = state(); const h = H();
+    let y = s.year, m = s.month;
+    const arg = (args || '').trim();
+    if (arg) {
+      const parts = arg.split(/[-/]/).map(x => parseInt(x, 10));
+      if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1]))
+        return sendMessage(chatId, `${header()}\n\n❓ ใช้: /export YYYY-MM`);
+      if (parts[0] > 1900) { y = parts[0]; m = parts[1]; } else { m = parts[0]; y = parts[1]; }
+    }
+    if (y !== s.year || m !== s.month)
+      return sendMessage(chatId, `${header()}\n\n⚠️ Live Polling export ได้เฉพาะเดือนที่โหลด (${s.month}/${s.year}) — โปรดเปลี่ยนเดือนในหน้าเว็บก่อน หรือใช้ /export ใน Auto Webhook`);
+    const days = h.daysInMonth(y, m);
+    const rows = ['Day,Nurse,Shift'];
+    s.nurses.filter(n => n.active !== false).forEach(n => {
+      for (let d = 1; d <= days; d++) {
+        const c = h.getShift(n.id, d);
+        if (c) rows.push(`${d},"${n.name.replace(/"/g,'""')}",${c}`);
+      }
+    });
+    const csv = rows.join('\n');
+    // ส่งเป็นไฟล์ผ่าน sendDocument
+    const token = getToken();
+    if (!token) return sendMessage(chatId, '❌ ไม่พบ Bot Token');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('caption', `📤 Export ${m}/${y} (${rows.length-1} rows)`);
+    form.append('document', blob, `schedule_${y}-${m}.csv`);
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: form });
+      const data = await r.json();
+      if (!data.ok) return sendMessage(chatId, `❌ ${data.description}`);
+    } catch (e) { return sendMessage(chatId, `❌ ${e.message}`); }
+  }
+
+  async function cmdAudit(chatId, msg, args) {
+    if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
+    const lim = Math.min(Math.max(parseInt(args) || 10, 1), 30);
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    const { data, error } = await sb.from('audit_log').select('ts,user_name,action,details').order('ts',{ascending:false}).limit(lim);
+    if (error) return sendMessage(chatId, `${header()}\n\n❌ ${escHtml(error.message)}`);
+    if (!data?.length) return sendMessage(chatId, `${header()}\n\n📋 ยังไม่มี audit log`);
+    const lines = [`${header()}\n\n📋 <b>Audit log (ล่าสุด ${data.length})</b>\n`];
+    data.forEach(r => {
+      const t = new Date(r.ts).toLocaleString('th-TH', { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' });
+      const det = r.details ? JSON.stringify(r.details).slice(0,60) : '';
+      lines.push(`• <code>${t}</code> <b>${escHtml(r.user_name||'?')}</b> · ${escHtml(r.action||'?')}${det?`\n  <i>${escHtml(det)}</i>`:''}`);
+    });
+    return sendMessage(chatId, lines.join('\n'));
+  }
+
+  async function cmdReset(chatId, msg, args) {
+    if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
+    const target = (args || '').trim();
+    if (!target) return sendMessage(chatId, `${header()}\n\n🔧 ใช้: <code>/reset &lt;chatid&gt;</code>`);
+    delete runtime.pendingCmd[target];
+    saveState();
+    const sb = _sb();
+    if (sb) await sb.from('bot_state').delete().eq('chat_id', target);
+    return sendMessage(chatId, `${header()}\n\n✅ ล้าง state ของ ${target} เรียบร้อย`);
   }
 
   // ── Swap workflow (multi-step conversational) ────────
@@ -13610,6 +13713,10 @@ window.onMonthChange = onMonthChange;
           { command: 'remind',    description: '⏰ ตั้งเตือน' },
           { command: 'subscribe', description: '🔔 รับสรุปอัตโนมัติ' },
           { command: 'quiet',     description: '🤫 ช่วงเงียบ' },
+          { command: 'stats',     description: '📊 สถิติรวม (admin)' },
+          { command: 'export',    description: '📤 Export CSV (admin)' },
+          { command: 'audit',     description: '📋 Audit log (admin)' },
+          { command: 'reset',     description: '🔧 ล้าง state (admin)' },
           { command: 'swap',      description: '🔄 ขอแลกเวร' },
           { command: 'leave',     description: '📝 ขอลา' },
           { command: 'pair',      description: '🔗 ผูกบัญชี' },

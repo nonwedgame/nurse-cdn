@@ -6918,7 +6918,7 @@ window.NurseExport = { exportSchedule, exportOT };
     if (![1, 2, 3].includes(newMode)) { showError('โหมดไม่ถูกต้อง'); return; }
     const oldMode = state.appSettings.shiftMode || 1;
     if (newMode === oldMode) { showSuccess('โหมดเดิม ไม่มีการเปลี่ยนแปลง'); return; }
-    confirmAct(`เปลี่ยนเป็น ${SHIFT_MODES[newMode].name}?`, 'การเปลี่ยนโหมดจะล้างตารางเวรเดือนนี้ (วันลายังคงอยู่)\nกด Undo เพื่อย้อนกลับได้').then(r => {
+    confirmAct(`เปลี่ยนเป็น ${SHIFT_MODES[newMode].name}?`, 'การเปลี่ยนโหมดจะล้างตารางเวรเดือนนี้ (วันลายังคงอยู่)\nกด Undo เพื่อย้อนกลับได้').then(async r => {
       if (!r.isConfirmed) return;
       window.NurseHistory?.pushHistory?.();
       state.appSettings.shiftMode = newMode;
@@ -6928,15 +6928,28 @@ window.NurseExport = { exportSchedule, exportOT };
       state.requirements = structuredClone(defReq);
 
       const prefix = `-${state.year}-${state.month}-`;
+      const deletedKeys = [];
       for (const key in state.schedule) {
-        if (key.includes(prefix)) delete state.schedule[key];
+        if (key.includes(prefix)) { deletedKeys.push(key); delete state.schedule[key]; }
       }
       for (const key in state.lockedShifts) {
         if (key.includes(prefix)) delete state.lockedShifts[key];
       }
       state.selectedShift = null;
       invalidateStats();
+
+      // 🔧 FIX: ลบ schedule rows ของเดือนนี้ใน Supabase ตรงๆ
+      // (เพราะ markDirty hook ไม่ track keys ที่ถูกลบไปแล้ว)
+      const sb = window.CloudStore?.client;
+      if (sb && deletedKeys.length) {
+        try {
+          await sb.from('schedule').delete()
+            .eq('year', state.year).eq('month', state.month);
+        } catch (e) { console.warn('mode change supabase delete:', e); }
+      }
       markDirty(); persistAll();
+      // Force re-pull เพื่อให้ realtime/notification เห็นข้อมูลใหม่
+      try { await window.CloudStore?.pullAll?.(); } catch (_) {}
 
       // Sync all UI panels
       window.NurseUI.loadReqToUI();

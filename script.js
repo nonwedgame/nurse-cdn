@@ -11741,20 +11741,27 @@ window.onMonthChange = onMonthChange;
   // ── Inline Keyboard builders ─────────────────────────
   function kbMainMenu(chatId) {
     const rows = [
-      [{ text: '📅 เวรวันนี้', callback_data: 'cmd:today' }, { text: '📆 พรุ่งนี้', callback_data: 'cmd:tomorrow' }],
-      [{ text: '🎯 เวรถัดไป', callback_data: 'cmd:next' }, { text: '😴 วันหยุด', callback_data: 'cmd:off' }],
-      [{ text: '🗓️ สัปดาห์', callback_data: 'cmd:week' }, { text: '👤 เวรของฉัน', callback_data: 'cmd:myshifts' }],
-      [{ text: '🖼️ ภาพตารางเวร', callback_data: 'cmd:img' }, { text: '🗓️ ภาพปฏิทิน', callback_data: 'cmd:imgcal' }],
-      [{ text: '📊 สรุปเดือน', callback_data: 'cmd:summary' }, { text: '📋 วันลา', callback_data: 'cmd:leaves' }],
-      [{ text: '💰 รายงาน OT', callback_data: 'cmd:ot' }, { text: '📚 ทะเบียนพยาบาล', callback_data: 'cmd:nurses' }],
-      [{ text: '🔄 ขอแลกเวร', callback_data: 'cmd:swap' }, { text: '📝 ขอลา', callback_data: 'cmd:leave' }],
-      [{ text: '🔗 ผูกบัญชี', callback_data: 'cmd:pair' }, { text: '⚙️ สถานะ', callback_data: 'cmd:status' }],
+      // ── ดูตารางเวร ──
+      [{ text: '📅 วันนี้', callback_data: 'cmd:today' }, { text: '📆 พรุ่งนี้', callback_data: 'cmd:tomorrow' }, { text: '🗓️ สัปดาห์', callback_data: 'cmd:week' }],
+      [{ text: '👤 ของฉัน', callback_data: 'cmd:myshifts' }, { text: '🎯 ถัดไป', callback_data: 'cmd:next' }, { text: '😴 วันหยุด', callback_data: 'cmd:off' }],
+      [{ text: '👥 ใครเข้าเวร', callback_data: 'cmd:whoison' }, { text: '📊 นับเวร', callback_data: 'cmd:count' }, { text: '🗓️ ปฏิทิน', callback_data: 'cmd:calendar' }],
+      // ── ภาพ ──
+      [{ text: '🖼️ ภาพตาราง', callback_data: 'cmd:img' }, { text: '🖼️ ภาพปฏิทิน', callback_data: 'cmd:imgcal' }, { text: '🖼️ ภาพของฉัน', callback_data: 'cmd:imgme' }],
+      // ── รายงาน ──
+      [{ text: '📈 สรุป', callback_data: 'cmd:summary' }, { text: '📋 ลาทั้งหมด', callback_data: 'cmd:leaves' }, { text: '📋 ลาของฉัน', callback_data: 'cmd:myleaves' }],
+      [{ text: '💰 OT รวม', callback_data: 'cmd:ot' }, { text: '💰 OT ฉัน', callback_data: 'cmd:myot' }, { text: '📚 พยาบาล', callback_data: 'cmd:nurses' }],
+      // ── แจ้งเตือน ──
+      [{ text: '🔔 รับสรุป', callback_data: 'cmd:subscribe' }, { text: '🤫 ช่วงเงียบ', callback_data: 'cmd:quiet' }, { text: '⏰ ตั้งเตือน', callback_data: 'cmd:remind' }],
+      // ── ยื่นคำขอ ──
+      [{ text: '🔄 แลกเวร', callback_data: 'cmd:swap' }, { text: '📝 ขอลา', callback_data: 'cmd:leave' }, { text: '🆘 ขอคนช่วย', callback_data: 'cmd:coverme' }],
+      // ── ระบบ ──
+      [{ text: '🔗 ผูกบัญชี', callback_data: 'cmd:pair' }, { text: '⚙️ สถานะ', callback_data: 'cmd:status' }, { text: '❓ วิธีใช้', callback_data: 'cmd:help' }],
     ];
     if (chatId && isAdmin(chatId)) {
-      rows.push([{ text: '🖨️ ศูนย์การพิมพ์', callback_data: 'cmd:print' }, { text: '⚙️ จัดเวรอัตโนมัติ', callback_data: 'cmd:generate' }]);
-      rows.push([{ text: '👑 เมนูแอดมิน', callback_data: 'cmd:admin' }]);
+      rows.push([{ text: '📊 สถิติ', callback_data: 'cmd:stats' }, { text: '📤 Export', callback_data: 'cmd:export' }, { text: '📋 Audit', callback_data: 'cmd:audit' }]);
+      rows.push([{ text: '📢 Broadcast', callback_data: 'cmd:broadcast' }, { text: '🛠️ มอบเวร', callback_data: 'cmd:assign' }, { text: '🖨️ พิมพ์', callback_data: 'cmd:print' }]);
+      rows.push([{ text: '⚙️ จัดเวรอัตโนมัติ', callback_data: 'cmd:generate' }, { text: '👑 เมนูแอดมิน', callback_data: 'cmd:admin' }]);
     }
-    rows.push([{ text: '❓ วิธีใช้', callback_data: 'cmd:help' }]);
     return { inline_keyboard: rows };
   }
 

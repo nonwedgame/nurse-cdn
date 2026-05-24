@@ -11563,11 +11563,13 @@ window.onMonthChange = onMonthChange;
    Lets nurses control the system via Telegram: /today, /myshifts, /swap, /pair, etc. */
 (function () {
   const STATE_KEY = 'smnc_bot_cmd_state_v1';
+  const MODE_KEY = 'smnc_bot_cmd_mode_v1';
   const POLL_INTERVAL_MS = 3000;
   const MAX_ACTIVITY = 50;
 
   let runtime = {
     enabled: false,
+    mode: 'auto',
     polling: false,
     lastUpdateId: 0,
     abortCtrl: null,
@@ -11592,6 +11594,8 @@ window.onMonthChange = onMonthChange;
       runtime.activity = s.activity || [];
       runtime.pendingCmd = s.pendingCmd || {};
       runtime.wasEnabled = !!s.wasEnabled;       // ⭐ remember toggle state across reloads
+      runtime.mode = s.mode || localStorage.getItem(MODE_KEY) || 'auto';
+      if (!['auto', 'live'].includes(runtime.mode)) runtime.mode = 'auto';
       Object.assign(runtime.stats, s.stats || {});
       Object.assign(runtime.config, s.config || {});
       // Reset daily counter if day changed
@@ -11611,9 +11615,11 @@ window.onMonthChange = onMonthChange;
         activity: runtime.activity.slice(0, MAX_ACTIVITY),
         pendingCmd: runtime.pendingCmd,
         wasEnabled: runtime.enabled,            // ⭐ persist toggle state
+        mode: runtime.mode,
         stats: runtime.stats,
         config: runtime.config,
       }));
+      localStorage.setItem(MODE_KEY, runtime.mode);
     } catch {}
   }
 
@@ -13313,15 +13319,70 @@ window.onMonthChange = onMonthChange;
     setTimeout(() => i.classList.add('hidden'), 600);
   }
 
+  function callGas(fnName) {
+    return new Promise((resolve, reject) => {
+      const runner = window.google?.script?.run;
+      if (!runner || typeof runner[fnName] !== 'function') return reject(new Error('google.script.run ไม่พร้อม'));
+      runner.withSuccessHandler(resolve).withFailureHandler(reject)[fnName]();
+    });
+  }
+
+  function renderMode() {
+    const autoBtn = document.getElementById('botCtlModeAuto');
+    const liveBtn = document.getElementById('botCtlModeLive');
+    const hint = document.getElementById('botCtlModeHint');
+    const cb = document.getElementById('botCtlEnabled');
+    if (autoBtn && liveBtn) {
+      autoBtn.className = runtime.mode === 'auto' ? 'botctl-btn botctl-btn-primary' : 'botctl-btn botctl-btn-ghost';
+      liveBtn.className = runtime.mode === 'live' ? 'botctl-btn botctl-btn-primary' : 'botctl-btn botctl-btn-ghost';
+    }
+    if (hint) {
+      hint.textContent = runtime.mode === 'auto'
+        ? 'Auto Webhook เปิดรับคำสั่งผ่าน Apps Script 24/7 ไม่ต้องเปิดเว็บค้างไว้'
+        : 'Live Polling จะใช้หน้าเว็บรับคำสั่งทุก 3 วินาที ต้องเปิดเว็บค้างไว้ และ webhook จะถูกปิดชั่วคราว';
+    }
+    if (cb) cb.disabled = runtime.mode !== 'live';
+    if (runtime.mode === 'auto') setStatus('off', 'Webhook');
+  }
+
+  async function setMode(mode) {
+    const nextMode = mode === 'live' ? 'live' : 'auto';
+    if (nextMode === runtime.mode) { renderMode(); return; }
+    runtime.mode = nextMode;
+    if (runtime.mode === 'auto') {
+      if (runtime.enabled) await toggle(false, { silent: true });
+      try {
+        await callGas('setWebhook');
+        activityLog('cmd', '☁️ switched to Auto Webhook');
+        window.NurseNotify?.add('success', '☁️ Auto Webhook พร้อมใช้งาน', 'Bot จะทำงานผ่าน Apps Script โดยไม่ต้องเปิดเว็บค้างไว้');
+      } catch (e) {
+        activityLog('err', `set webhook: ${e.message}`);
+        window.NurseNotify?.add('warning', '☁️ เลือก Auto Webhook แล้ว', 'ถ้า webhook ยังไม่ทำงาน ให้รัน setWebhook() ใน Apps Script');
+      }
+    } else {
+      try {
+        await tgCall('deleteWebhook', { drop_pending_updates: false });
+        activityLog('cmd', '⚡ switched to Live Polling (webhook disabled)');
+        window.NurseNotify?.add('info', '⚡ Live Polling พร้อมใช้งาน', 'เปิดสวิตช์ Live เพื่อเริ่ม poll คำสั่งจาก Telegram');
+      } catch (e) {
+        activityLog('err', `delete webhook: ${e.message}`);
+        window.NurseNotify?.add('warning', 'ปิด webhook ไม่สำเร็จ', e.message);
+      }
+      setStatus('off', 'Live');
+    }
+    saveState();
+    renderMode();
+  }
+
   // ── Public API ───────────────────────────────────────
   async function toggle(on, opts = {}) {
-    if (on && window.__DISABLE_BROWSER_BOT_POLLING__) {
+    if (on && runtime.mode !== 'live') {
       runtime.enabled = false;
       runtime.wasEnabled = false;
       saveState();
       const cb = document.getElementById('botCtlEnabled'); if (cb) cb.checked = false;
       setStatus('off', 'Webhook');
-      if (!opts.silent) window.NurseNotify?.add('info', '🤖 ใช้ Webhook แล้ว', 'Bot ทำงานผ่าน Apps Script ไม่ต้องเปิดเว็บค้างไว้');
+      if (!opts.silent) window.NurseNotify?.add('info', '☁️ อยู่ในโหมด Auto Webhook', 'ถ้าต้องการ poll ด้วยหน้าเว็บ ให้เลือก Live Polling ก่อน');
       return;
     }
     runtime.enabled = !!on;
@@ -13739,7 +13800,7 @@ window.onMonthChange = onMonthChange;
 
   function init() {
     loadState();
-    if (window.__DISABLE_BROWSER_BOT_POLLING__) {
+    if (runtime.mode === 'auto') {
       runtime.enabled = false;
       runtime.wasEnabled = false;
       saveState();
@@ -13749,13 +13810,14 @@ window.onMonthChange = onMonthChange;
     renderActivity();
     renderStats();
     setStatus('off', 'ปิดอยู่');
-    if (window.__DISABLE_BROWSER_BOT_POLLING__) {
+    renderMode();
+    if (runtime.mode === 'auto') {
       const cb = document.getElementById('botCtlEnabled');
       if (cb) cb.checked = false;
       setStatus('off', 'Webhook');
     }
     // ⭐ Auto-resume if was enabled before page reload
-    if (runtime.wasEnabled && !window.__DISABLE_BROWSER_BOT_POLLING__) {
+    if (runtime.wasEnabled && runtime.mode === 'live') {
       const cb = document.getElementById('botCtlEnabled');
       if (cb) cb.checked = true;
       // Delay slightly to let NurseState load first (for token)
@@ -13764,7 +13826,7 @@ window.onMonthChange = onMonthChange;
   }
 
   window.NurseBotCmd = {
-    init, toggle, installCommands, sendMainMenu,
+    init, toggle, setMode, installCommands, sendMainMenu,
     unpair, approveSwap, rejectSwap,
     pingUser, messageUser, viewUserShifts,
     filterPaired, exportPaired, exportRequests,

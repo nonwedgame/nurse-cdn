@@ -11693,13 +11693,19 @@ window.onMonthChange = onMonthChange;
     return data.result;
   }
 
+  // Default nav footer — เพิ่ม 🏠 + ❌ ให้ทุกข้อความที่ไม่มี keyboard เอง
+  const NAV_FOOTER = { inline_keyboard: [[
+    { text: '🏠 เมนูหลัก', callback_data: 'cmd:menu' },
+    { text: '❌ ปิด', callback_data: 'cmd:close' },
+  ]]};
   async function sendMessage(chatId, text, opts = {}) {
+    const reply_markup = opts.reply_markup || (opts.noNav ? undefined : NAV_FOOTER);
     try {
       return await tgCall('sendMessage', {
         chat_id: chatId,
         text,
         parse_mode: opts.parse_mode || 'HTML',
-        reply_markup: opts.reply_markup,
+        reply_markup,
         disable_web_page_preview: true,
       });
     } catch (e) {
@@ -11709,7 +11715,7 @@ window.onMonthChange = onMonthChange;
           const plain = String(text).replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
           return await tgCall('sendMessage', {
             chat_id: chatId, text: plain,
-            reply_markup: opts.reply_markup, disable_web_page_preview: true,
+            reply_markup, disable_web_page_preview: true,
           });
         } catch (e2) {
           activityLog('err', `ส่งไม่สำเร็จ (retry): ${e2.message}`);
@@ -13504,12 +13510,9 @@ window.onMonthChange = onMonthChange;
           const parts = cq.data.split(':');
           const cmd = parts[1];
           const arg = parts.slice(2).join(':');
-          // ปิดเมนู — ลบข้อความ
-          if (cmd === 'close') {
-            try { await tgCall('deleteMessage', { chat_id: chatId, message_id: cq.message.message_id }); }
-            catch (e) { activityLog('err', `delete: ${e.message}`); }
-            trackSuccess(Date.now()-t0); return;
-          }
+          // ลบข้อความเดิมก่อนทุกครั้ง (auto-clean)
+          try { await tgCall('deleteMessage', { chat_id: chatId, message_id: cq.message.message_id }); } catch (_) {}
+          if (cmd === 'close') { trackSuccess(Date.now()-t0); return; }
           const fn = COMMANDS[cmd];
           if (fn) { await fn(chatId, { from: cq.from }, arg); trackSuccess(Date.now()-t0); return; }
           await sendMessage(chatId, `❓ ไม่รู้จักปุ่ม: ${escHtml(cmd)}`);

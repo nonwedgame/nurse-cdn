@@ -11802,6 +11802,8 @@ window.onMonthChange = onMonthChange;
     remind: cmdRemind, subscribe: cmdSubscribe, quiet: cmdQuiet,
     // Phase 3
     stats: cmdStats, export: cmdExport, audit: cmdAudit, reset: cmdReset,
+    // Phase 4
+    trade: cmdTrade, coverme: cmdCoverMe, assign: cmdAssign,
   };
 
   function header() {
@@ -12397,6 +12399,83 @@ window.onMonthChange = onMonthChange;
     const sb = _sb();
     if (sb) await sb.from('bot_state').delete().eq('chat_id', target);
     return sendMessage(chatId, `${header()}\n\n✅ ล้าง state ของ ${target} เรียบร้อย`);
+  }
+
+  // ── Phase 4: text one-shot workflows ──────────────────
+  async function cmdTrade(chatId, msg, args) {
+    const argArr = (args || '').split(/\s+/).filter(Boolean);
+    if (argArr.length < 3) return sendMessage(chatId,
+      `${header()}\n\n🤝 <b>เสนอแลกเวร</b>\n<code>/trade PARTNER_NAME MYDAY THEIRDAY</code>`);
+    const theirDay = parseInt(argArr[argArr.length - 1]);
+    const myDay = parseInt(argArr[argArr.length - 2]);
+    const partnerName = argArr.slice(0, argArr.length - 2).join(' ');
+    if (!myDay || !theirDay) return sendMessage(chatId, `${header()}\n\n❓ วันที่ต้องเป็นตัวเลข`);
+    const nurse = getPairedNurse(chatId);
+    if (!nurse) return sendMessage(chatId, `${header()}\n\n⚠️ ต้องผูกบัญชีก่อน`);
+    const s = state(); const h = H();
+    const partner = s.nurses.find(n => n.active !== false && n.name.includes(partnerName));
+    if (!partner) return sendMessage(chatId, `${header()}\n\n❌ ไม่พบ ${escHtml(partnerName)}`);
+    const myShift = h.getShift(nurse.id, myDay);
+    const theirShift = h.getShift(partner.id, theirDay);
+    if (!myShift) return sendMessage(chatId, `${header()}\n\n❌ คุณไม่มีเวรวันที่ ${myDay}`);
+    if (!theirShift) return sendMessage(chatId, `${header()}\n\n❌ ${partner.name} ไม่มีเวรวันที่ ${theirDay}`);
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    const swapId = 'sw_' + Date.now();
+    await sb.from('swaps').insert([{
+      id: swapId, from_nurse_id: nurse.id, to_nurse_id: partner.id,
+      from_day: myDay, to_day: theirDay, from_shift: myShift, to_shift: theirShift,
+      year: s.year, month: s.month, status: 'pending', reason: '',
+    }]);
+    // แจ้งคู่
+    const partnerChats = Object.entries(runtime.paired).filter(([_, p]) => p.nurseId === partner.id);
+    for (const [pcid] of partnerChats) {
+      await sendMessage(pcid, `${header()}\n\n🤝 <b>คำขอแลกเวรใหม่</b>\nจาก: <b>${escHtml(nurse.name)}</b>\nวัน ${myDay} (${myShift}) ↔ วัน ${theirDay} (${theirShift})`);
+    }
+    return sendMessage(chatId, `${header()}\n\n✅ ส่งคำขอแลก <code>${swapId}</code> แล้ว`);
+  }
+
+  async function cmdCoverMe(chatId, msg, args) {
+    const argArr = (args || '').split(/\s+/).filter(Boolean);
+    if (!argArr.length) return sendMessage(chatId,
+      `${header()}\n\n🆘 <b>ขอคนช่วยทำเวรแทน</b>\n<code>/coverme DAY [REASON]</code>`);
+    const day = parseInt(argArr[0]);
+    const reason = argArr.slice(1).join(' ') || '(ไม่ระบุ)';
+    const nurse = getPairedNurse(chatId);
+    if (!nurse) return sendMessage(chatId, `${header()}\n\n⚠️ ต้องผูกบัญชีก่อน`);
+    const s = state(); const h = H();
+    const myShift = h.getShift(nurse.id, day);
+    if (!myShift) return sendMessage(chatId, `${header()}\n\n❌ คุณไม่มีเวรวันที่ ${day}`);
+    const text = `${header()}\n\n🆘 <b>ขอคนช่วยทำเวรแทน</b>\n👤 จาก: <b>${escHtml(nurse.name)}</b>\n📅 วันที่ ${day}/${s.month} เวร <b>${myShift}</b>\n💬 ${escHtml(reason)}`;
+    const targets = Object.entries(runtime.paired).filter(([_, p]) => p.nurseId !== nurse.id);
+    let ok = 0;
+    for (const [tcid] of targets) {
+      try { await sendMessage(tcid, text); ok++; } catch (_) {}
+    }
+    return sendMessage(chatId, `${header()}\n\n✅ กระจายให้ ${ok} คน`);
+  }
+
+  async function cmdAssign(chatId, msg, args) {
+    if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
+    const argArr = (args || '').split(/\s+/).filter(Boolean);
+    if (argArr.length < 3) return sendMessage(chatId,
+      `${header()}\n\n🛠️ <b>มอบเวร (admin)</b>\n<code>/assign DAY SHIFT NURSE_NAME</code>`);
+    const day = parseInt(argArr[0]);
+    const code = argArr[1];
+    const name = argArr.slice(2).join(' ');
+    if (!day) return sendMessage(chatId, `${header()}\n\n❓ วันที่ต้องเป็นตัวเลข`);
+    if (!['ช','บ','ด','ชบ','ดบ','ชด','O'].includes(code))
+      return sendMessage(chatId, `${header()}\n\n❓ รหัสเวร: ช/บ/ด/ชบ/ดบ/ชด/O`);
+    const s = state();
+    const n = s.nurses.find(x => x.active !== false && x.name.includes(name));
+    if (!n) return sendMessage(chatId, `${header()}\n\n❌ ไม่พบ ${escHtml(name)}`);
+    const sb = _sb(); if (!sb) return sendMessage(chatId, `${header()}\n\n❌ Supabase ยังไม่พร้อม`);
+    const me = getPairedNurse(chatId);
+    const { error } = await sb.from('schedule').upsert({
+      nurse_id: n.id, year: s.year, month: s.month, day: day, shift_code: code,
+      updated_at: new Date().toISOString(), updated_by: me?.name || 'bot',
+    });
+    if (error) return sendMessage(chatId, `${header()}\n\n❌ ${escHtml(error.message)}`);
+    return sendMessage(chatId, `${header()}\n\n✅ มอบเวร <b>${code}</b> ให้ <b>${escHtml(n.name)}</b> วันที่ ${day}/${s.month}`);
   }
 
   // ── Swap workflow (multi-step conversational) ────────
@@ -13717,6 +13796,9 @@ window.onMonthChange = onMonthChange;
           { command: 'export',    description: '📤 Export CSV (admin)' },
           { command: 'audit',     description: '📋 Audit log (admin)' },
           { command: 'reset',     description: '🔧 ล้าง state (admin)' },
+          { command: 'trade',     description: '🤝 เสนอแลกเวร (text)' },
+          { command: 'coverme',   description: '🆘 ขอคนช่วยทำเวรแทน' },
+          { command: 'assign',    description: '🛠️ มอบเวร (admin)' },
           { command: 'swap',      description: '🔄 ขอแลกเวร' },
           { command: 'leave',     description: '📝 ขอลา' },
           { command: 'pair',      description: '🔗 ผูกบัญชี' },

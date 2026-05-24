@@ -11762,6 +11762,7 @@ window.onMonthChange = onMonthChange;
       rows.push([{ text: '📢 Broadcast', callback_data: 'cmd:broadcast' }, { text: '🛠️ มอบเวร', callback_data: 'cmd:assign' }, { text: '🖨️ พิมพ์', callback_data: 'cmd:print' }]);
       rows.push([{ text: '⚙️ จัดเวรอัตโนมัติ', callback_data: 'cmd:generate' }, { text: '👑 เมนูแอดมิน', callback_data: 'cmd:admin' }]);
     }
+    rows.push([{ text: '❌ ปิดเมนู', callback_data: 'cmd:close' }]);
     return { inline_keyboard: rows };
   }
 
@@ -13503,6 +13504,12 @@ window.onMonthChange = onMonthChange;
           const parts = cq.data.split(':');
           const cmd = parts[1];
           const arg = parts.slice(2).join(':');
+          // ปิดเมนู — ลบข้อความ
+          if (cmd === 'close') {
+            try { await tgCall('deleteMessage', { chat_id: chatId, message_id: cq.message.message_id }); }
+            catch (e) { activityLog('err', `delete: ${e.message}`); }
+            trackSuccess(Date.now()-t0); return;
+          }
           const fn = COMMANDS[cmd];
           if (fn) { await fn(chatId, { from: cq.from }, arg); trackSuccess(Date.now()-t0); return; }
           await sendMessage(chatId, `❓ ไม่รู้จักปุ่ม: ${escHtml(cmd)}`);

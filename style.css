@@ -4166,3 +4166,263 @@ button.notif-stat-chip.active {
   .mss-btn-label { color: #cbd5e1; }
   .mss-cancel { background: #334155; color: #f1f5f9; border-color: #475569; }
 }
+
+
+/* ==================== MOBILE COMPACT MODE v2 ==================== */
+/* Aggressive layout shrink for phones (≤ 768px)
+   เป้าหมาย: ทำให้พื้นที่ตารางเวร > 50% ของจอ */
+
+@media (max-width: 768px) {
+
+  /* ── A. Header: บีบให้สูงน้อยลง ── */
+  .app-header,
+  header.app-header,
+  [class*="app-header"] {
+    padding: 8px 12px !important;
+  }
+  .app-header h1,
+  header h1 {
+    font-size: 17px !important;
+    line-height: 1.2 !important;
+  }
+  /* ซ่อน subtitle "v3.1.2 Enterprise Suite | วิทยาลัย..." */
+  .app-header .subtitle,
+  .app-subtitle,
+  .header-subtitle,
+  h1 + div.text-xs,
+  h1 + .text-sm {
+    display: none !important;
+  }
+
+  /* ── B. Toolbar: ปุ่ม Excel/PDF/พิมพ์/โหมดล็อก/เพิ่มพยาบาล/ดาร์ก/undo/redo ── */
+  /* รวมเป็นแถวเดียว scroll แนวนอน */
+  .toolbar,
+  .header-toolbar,
+  [class*="toolbar"]:not(.mobile-bottom-nav) {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 6px 8px !important;
+    gap: 6px !important;
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+
+  .toolbar button,
+  .toolbar .btn,
+  [class*="toolbar"] button {
+    flex: 0 0 auto !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+    min-height: 36px !important;
+    white-space: nowrap !important;
+  }
+  .toolbar button i,
+  .toolbar button svg {
+    width: 14px !important; height: 14px !important;
+  }
+
+  /* ── C. ส่วนเลือก track / สถานะ "พร้อมใช้งาน" ── */
+  select.track-select,
+  .track-selector,
+  [class*="track-select"] {
+    min-width: 0 !important;
+    max-width: 140px !important;
+    font-size: 12px !important;
+  }
+
+  /* ── D. Schedule filter card (เดือน/ปี/วันธรรมดา/วันหยุด/วันหยุดราชการ) ── */
+  /* ลด padding + เปลี่ยน input ให้เล็กลง */
+  .schedule-filter-card,
+  .filter-card,
+  .month-selector-card {
+    padding: 8px 10px !important;
+    margin-bottom: 8px !important;
+  }
+  .schedule-filter-card label,
+  .filter-card label {
+    font-size: 11px !important;
+    margin-bottom: 2px !important;
+  }
+  .schedule-filter-card select,
+  .schedule-filter-card input {
+    padding: 6px 8px !important;
+    font-size: 14px !important;
+    min-height: 38px !important;
+  }
+  /* "วันธรรมดา ช/บ/ด" และ "วันหยุด ช/บ/ด" input ตัวเลข — บีบให้เล็กลง */
+  .req-input-group input[type="number"],
+  .req-card input[type="number"] {
+    width: 36px !important;
+    padding: 4px !important;
+    font-size: 13px !important;
+  }
+
+  /* ── E. Schedule action buttons (วันหยุดราชการ/จัดอัตโนมัติ/บันทึก/ล้าง) ── */
+  .schedule-actions,
+  .action-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .schedule-actions button,
+  .action-bar button {
+    font-size: 12px !important;
+    padding: 8px 12px !important;
+    min-height: 36px !important;
+    flex: 1 1 auto !important;
+  }
+
+  /* ── F. Shift Palette (เลือกเวรเพื่อกรอก) ── */
+  /* บนมือถือ ซ่อนทั้งแถบ เพราะมี Bottom Sheet แทน */
+  .shift-palette-container,
+  .palette-wrapper,
+  #shiftPalette,
+  [data-mobile-hide="palette"] {
+    display: none !important;
+  }
+  /* ถ้าเลือกแสดงไว้ — บีบให้เล็กลง */
+  .shift-palette {
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  .shift-palette button,
+  .palette-btn {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    min-height: 36px !important;
+  }
+  /* ซ่อน label "เช้า/บ่าย/ดึก" เก็บแค่ code */
+  .palette-btn .palette-label {
+    display: none !important;
+  }
+
+  /* ── G. Hint บรรทัด "เคล็ดลับ: กดเลข 1-6 เพื่อเลือกเวร..." ── */
+  .keyboard-hint,
+  .hint-text,
+  .tip-text,
+  [class*="-hint"] {
+    display: none !important;
+  }
+
+  /* ── H. ปุ่ม Quick Actions (ยกเลิกเลือก / ล็อก จ/พ/ศ / ลัด หัวหน้า) ── */
+  .quick-actions,
+  .quick-action-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .quick-actions button {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    min-height: 32px !important;
+  }
+
+  /* ── I. ตารางเวร: ลด padding cell + บีบ font ── */
+  #scheduleTable th,
+  #scheduleTable td {
+    padding: 4px 2px !important;
+    font-size: 12px !important;
+  }
+  #scheduleTable th {
+    font-size: 11px !important;
+  }
+  /* ลดความกว้างคอลัมน์ ลำดับ + ชื่อ */
+  #scheduleTable th:nth-child(1),
+  #scheduleTable td:nth-child(1) {
+    width: 28px !important; min-width: 28px !important;
+    font-size: 11px !important;
+  }
+  #scheduleTable th:nth-child(2),
+  #scheduleTable td:nth-child(2) {
+    width: 80px !important; min-width: 80px !important;
+    font-size: 12px !important;
+    padding-left: 4px !important; padding-right: 4px !important;
+  }
+  /* ปรับ sticky offset ให้ตรงกับ column width ใหม่ */
+  #scheduleTable th:nth-child(2),
+  #scheduleTable td:nth-child(2) { left: 28px !important; }
+
+  /* ตำแหน่ง (badge สีเขียว/ม่วง) — ย่อตัวอักษร */
+  #scheduleTable .position-badge,
+  #scheduleTable .pos-badge {
+    font-size: 9px !important;
+    padding: 1px 4px !important;
+    white-space: nowrap !important;
+    max-width: 70px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* ── J. Legend ใต้ตาราง ── */
+  .schedule-legend,
+  .legend-bar {
+    font-size: 10px !important;
+    padding: 6px 8px !important;
+    gap: 4px !important;
+    flex-wrap: wrap !important;
+  }
+  .schedule-legend .legend-item {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+
+  /* ── K. Dashboard cards: 2 cols แทน 3 ── */
+  .dashboard-cards-grid,
+  .stat-cards-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .stat-card {
+    padding: 10px !important;
+    min-height: 90px !important;
+  }
+  .stat-card .stat-value {
+    font-size: 22px !important;
+  }
+  .stat-card .stat-label {
+    font-size: 11px !important;
+  }
+
+  /* ── L. Footer (© 2026 ...) ── */
+  .app-footer,
+  footer {
+    font-size: 9px !important;
+    padding: 6px 8px !important;
+    text-align: center !important;
+    line-height: 1.4 !important;
+  }
+
+  /* ── M. กัน body มี padding-bottom เผื่อ bottom-nav ── */
+  body {
+    padding-bottom: 70px !important;
+  }
+
+  /* ── N. ปุ่ม Pulse "Supabase ▪ 48s" มุมขวาล่าง ── */
+  /* ย้ายไปอยู่ขวาบน หรือซ่อน */
+  .supabase-status,
+  .pulse-indicator,
+  [class*="supabase-pulse"] {
+    bottom: 80px !important; /* เหนือ bottom nav */
+    right: 16px !important;
+    font-size: 10px !important;
+    padding: 4px 10px !important;
+    z-index: 9980 !important;
+  }
+
+  /* ── O. FAB ปรับตำแหน่งให้ไม่ทับ supabase-status ── */
+  .mobile-fab {
+    bottom: 110px !important; /* เหนือ pulse */
+  }
+}
+
+/* ── Extra small (iPhone SE etc) ≤ 380px ── */
+@media (max-width: 380px) {
+  #scheduleTable th:nth-child(2),
+  #scheduleTable td:nth-child(2) {
+    width: 60px !important; min-width: 60px !important;
+  }
+  #scheduleTable th:nth-child(2),
+  #scheduleTable td:nth-child(2) { left: 28px !important; }
+  #scheduleTable .position-badge { display: none !important; }
+  .app-header h1 { font-size: 15px !important; }
+  .toolbar button { font-size: 11px !important; padding: 5px 8px !important; }
+}

@@ -4168,261 +4168,234 @@ button.notif-stat-chip.active {
 }
 
 
-/* ==================== MOBILE COMPACT MODE v2 ==================== */
-/* Aggressive layout shrink for phones (≤ 768px)
-   เป้าหมาย: ทำให้พื้นที่ตารางเวร > 50% ของจอ */
+
+
+/* ==================== MOBILE LAYOUT v3 ==================== */
+/* แนวคิด: ซ่อนปุ่มรองในเฮดเดอร์ → เก็บไว้ใน bottom sheet "เพิ่มเติม"
+   เก็บไว้เฉพาะปุ่มหลัก + ตัวอักษรใหญ่อ่านง่าย */
 
 @media (max-width: 768px) {
 
-  /* ── A. Header: บีบให้สูงน้อยลง ── */
-  .app-header,
-  header.app-header,
-  [class*="app-header"] {
-    padding: 8px 12px !important;
-  }
-  .app-header h1,
-  header h1 {
-    font-size: 17px !important;
-    line-height: 1.2 !important;
-  }
-  /* ซ่อน subtitle "v3.1.2 Enterprise Suite | วิทยาลัย..." */
-  .app-header .subtitle,
-  .app-subtitle,
-  .header-subtitle,
-  h1 + div.text-xs,
-  h1 + .text-sm {
+  /* ── HEADER: ปุ่มแอ็คชันรองซ่อน (มีใน bottom sheet "เพิ่มเติม") ── */
+  /* ใช้ data-act selectors ที่ตรงกับ body.html จริง */
+  header [data-act="toggle-lock-mode"],
+  header [data-act="add-nurse-tab"],
+  header [data-act="export-xlsx"],
+  header [data-act="export-pdf"],
+  header [data-act="print"],
+  header #btnLockMode,
+  header #btnUndo,
+  header #btnRedo {
     display: none !important;
   }
 
-  /* ── B. Toolbar: ปุ่ม Excel/PDF/พิมพ์/โหมดล็อก/เพิ่มพยาบาล/ดาร์ก/undo/redo ── */
-  /* รวมเป็นแถวเดียว scroll แนวนอน */
-  .toolbar,
-  .header-toolbar,
-  [class*="toolbar"]:not(.mobile-bottom-nav) {
-    overflow-x: auto !important;
-    flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+  /* ── HEADER: ปรับ title ให้ใหญ่อ่านชัด ── */
+  header h1 {
+    font-size: 18px !important;
+    line-height: 1.25 !important;
+    font-weight: 800 !important;
+  }
+  /* ซ่อน subtitle "v3.1.2 Enterprise Suite | รพ.สต.สวนฝ้าย" */
+  header h1 + .text-xs,
+  header h1 + div.text-xs,
+  header .header-subtitle,
+  header [class*="text-xs"][class*="opacity"] {
+    display: none !important;
+  }
+
+  /* ── HEADER: ward selector + save indicator คงไว้ แต่ขยาย ── */
+  header select#headerWardSelector {
+    font-size: 13px !important;
     padding: 6px 8px !important;
-    gap: 6px !important;
-  }
-  .toolbar::-webkit-scrollbar { display: none; }
-
-  .toolbar button,
-  .toolbar .btn,
-  [class*="toolbar"] button {
-    flex: 0 0 auto !important;
-    padding: 6px 10px !important;
-    font-size: 12px !important;
     min-height: 36px !important;
-    white-space: nowrap !important;
   }
-  .toolbar button i,
-  .toolbar button svg {
-    width: 14px !important; height: 14px !important;
-  }
-
-  /* ── C. ส่วนเลือก track / สถานะ "พร้อมใช้งาน" ── */
-  select.track-select,
-  .track-selector,
-  [class*="track-select"] {
-    min-width: 0 !important;
-    max-width: 140px !important;
-    font-size: 12px !important;
+  header .save-indicator,
+  header #saveIndicator {
+    font-size: 11px !important;
+    padding: 4px 10px !important;
   }
 
-  /* ── D. Schedule filter card (เดือน/ปี/วันธรรมดา/วันหยุด/วันหยุดราชการ) ── */
-  /* ลด padding + เปลี่ยน input ให้เล็กลง */
+  /* ── HEADER: padding compact ── */
+  header {
+    padding: 8px 12px !important;
+  }
+  header > div {
+    gap: 8px !important;
+  }
+  header .h-5.w-\[1px\] {
+    display: none !important; /* ซ่อน divider */
+  }
+
+  /* ── ปุ่ม notifications / theme toggle (icon round button) ── */
+  header button[type="button"].p-2 {
+    padding: 6px !important;
+    min-height: 36px !important;
+    min-width: 36px !important;
+  }
+
+  /* ── เพิ่มปุ่ม Hamburger เปิด bottom sheet (ถ้ายังไม่มี) ── */
+  /* ใช้ #btnMobileMore ที่มีอยู่แล้วใน bottom-nav */
+
+  /* ── Schedule Filter Card: คืน layout เดิม + บีบเล็กน้อย ── */
   .schedule-filter-card,
   .filter-card,
   .month-selector-card {
-    padding: 8px 10px !important;
-    margin-bottom: 8px !important;
+    padding: 10px !important;
   }
-  .schedule-filter-card label,
-  .filter-card label {
-    font-size: 11px !important;
-    margin-bottom: 2px !important;
-  }
-  .schedule-filter-card select,
-  .schedule-filter-card input {
-    padding: 6px 8px !important;
-    font-size: 14px !important;
-    min-height: 38px !important;
-  }
-  /* "วันธรรมดา ช/บ/ด" และ "วันหยุด ช/บ/ด" input ตัวเลข — บีบให้เล็กลง */
-  .req-input-group input[type="number"],
-  .req-card input[type="number"] {
-    width: 36px !important;
+  /* req inputs (ช/บ/ด ตัวเลข) — คืนความกว้างให้พอใส่ 1-2 หลัก */
+  input[type="number"][min="0"][max="20"],
+  .req-input-group input[type="number"] {
+    width: 48px !important;
+    text-align: center !important;
+    font-size: 16px !important;
+    min-height: 40px !important;
     padding: 4px !important;
+  }
+  /* label ตัวอักษรอ่านง่าย */
+  label, .field-label {
     font-size: 13px !important;
+    font-weight: 600 !important;
   }
 
-  /* ── E. Schedule action buttons (วันหยุดราชการ/จัดอัตโนมัติ/บันทึก/ล้าง) ── */
-  .schedule-actions,
-  .action-bar {
-    flex-wrap: wrap !important;
-    gap: 6px !important;
-  }
-  .schedule-actions button,
-  .action-bar button {
-    font-size: 12px !important;
-    padding: 8px 12px !important;
-    min-height: 36px !important;
-    flex: 1 1 auto !important;
-  }
-
-  /* ── F. Shift Palette (เลือกเวรเพื่อกรอก) ── */
-  /* บนมือถือ ซ่อนทั้งแถบ เพราะมี Bottom Sheet แทน */
-  .shift-palette-container,
-  .palette-wrapper,
-  #shiftPalette,
-  [data-mobile-hide="palette"] {
-    display: none !important;
-  }
-  /* ถ้าเลือกแสดงไว้ — บีบให้เล็กลง */
-  .shift-palette {
-    flex-wrap: wrap !important;
-    gap: 4px !important;
-  }
-  .shift-palette button,
-  .palette-btn {
-    padding: 6px 10px !important;
-    font-size: 13px !important;
-    min-height: 36px !important;
-  }
-  /* ซ่อน label "เช้า/บ่าย/ดึก" เก็บแค่ code */
-  .palette-btn .palette-label {
-    display: none !important;
-  }
-
-  /* ── G. Hint บรรทัด "เคล็ดลับ: กดเลข 1-6 เพื่อเลือกเวร..." ── */
+  /* ── Hint บรรทัด "เคล็ดลับ: กดเลข 1-6..." ── */
   .keyboard-hint,
-  .hint-text,
   .tip-text,
-  [class*="-hint"] {
+  div[class*="text-xs"][class*="text-slate-500"]:not(.save-indicator):not([id]) {
     display: none !important;
   }
 
-  /* ── H. ปุ่ม Quick Actions (ยกเลิกเลือก / ล็อก จ/พ/ศ / ลัด หัวหน้า) ── */
-  .quick-actions,
-  .quick-action-bar {
-    flex-wrap: wrap !important;
-    gap: 6px !important;
+  /* ── Shift Palette ── */
+  /* บนมือถือ: แสดงเล็กๆ แค่ row เดียว (ผู้ใช้ก็เลือกผ่าน bottom sheet ได้) */
+  /* ไม่ซ่อน เพื่อให้ user ยังเลือกแบบเก่าได้ */
+  #shiftPalette,
+  .shift-palette-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
   }
-  .quick-actions button {
-    font-size: 11px !important;
-    padding: 6px 10px !important;
-    min-height: 32px !important;
+  #shiftPalette::-webkit-scrollbar,
+  .shift-palette-container::-webkit-scrollbar { display: none; }
+  #shiftPalette button,
+  .shift-palette-container button {
+    flex: 0 0 auto !important;
+    padding: 8px 14px !important;
+    font-size: 14px !important;
+    min-height: 42px !important;
+    white-space: nowrap !important;
   }
 
-  /* ── I. ตารางเวร: ลด padding cell + บีบ font ── */
+  /* ── Schedule Table: padding + font readable ── */
   #scheduleTable th,
   #scheduleTable td {
-    padding: 4px 2px !important;
-    font-size: 12px !important;
+    padding: 6px 3px !important;
+    font-size: 13px !important;
   }
-  #scheduleTable th {
-    font-size: 11px !important;
-  }
-  /* ลดความกว้างคอลัมน์ ลำดับ + ชื่อ */
+  #scheduleTable th { font-size: 12px !important; }
   #scheduleTable th:nth-child(1),
   #scheduleTable td:nth-child(1) {
-    width: 28px !important; min-width: 28px !important;
-    font-size: 11px !important;
+    width: 32px !important; min-width: 32px !important;
+    font-size: 12px !important;
   }
   #scheduleTable th:nth-child(2),
   #scheduleTable td:nth-child(2) {
-    width: 80px !important; min-width: 80px !important;
-    font-size: 12px !important;
-    padding-left: 4px !important; padding-right: 4px !important;
-  }
-  /* ปรับ sticky offset ให้ตรงกับ column width ใหม่ */
-  #scheduleTable th:nth-child(2),
-  #scheduleTable td:nth-child(2) { left: 28px !important; }
-
-  /* ตำแหน่ง (badge สีเขียว/ม่วง) — ย่อตัวอักษร */
-  #scheduleTable .position-badge,
-  #scheduleTable .pos-badge {
-    font-size: 9px !important;
-    padding: 1px 4px !important;
-    white-space: nowrap !important;
-    max-width: 70px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    width: 90px !important; min-width: 90px !important;
+    font-size: 13px !important;
+    padding-left: 6px !important; padding-right: 6px !important;
+    left: 32px !important;
   }
 
-  /* ── J. Legend ใต้ตาราง ── */
-  .schedule-legend,
-  .legend-bar {
-    font-size: 10px !important;
-    padding: 6px 8px !important;
-    gap: 4px !important;
-    flex-wrap: wrap !important;
-  }
-  .schedule-legend .legend-item {
-    font-size: 10px !important;
-    padding: 2px 6px !important;
-  }
-
-  /* ── K. Dashboard cards: 2 cols แทน 3 ── */
+  /* ── Dashboard cards: 2 cols สวยกว่า ── */
   .dashboard-cards-grid,
-  .stat-cards-grid {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
+  .stat-cards-grid,
+  [class*="grid-cols-3"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
   }
-  .stat-card {
-    padding: 10px !important;
-    min-height: 90px !important;
-  }
-  .stat-card .stat-value {
-    font-size: 22px !important;
-  }
-  .stat-card .stat-label {
-    font-size: 11px !important;
+  /* ยกเว้น schedule pivot grid */
+  #scheduleTable [class*="grid-cols"],
+  .pivot-grid [class*="grid-cols"] {
+    grid-template-columns: unset !important;
   }
 
-  /* ── L. Footer (© 2026 ...) ── */
-  .app-footer,
-  footer {
-    font-size: 9px !important;
-    padding: 6px 8px !important;
+  /* ── Footer ── */
+  footer, .app-footer {
+    font-size: 10px !important;
+    padding: 8px 10px !important;
     text-align: center !important;
-    line-height: 1.4 !important;
+    line-height: 1.5 !important;
   }
 
-  /* ── M. กัน body มี padding-bottom เผื่อ bottom-nav ── */
-  body {
-    padding-bottom: 70px !important;
-  }
+  /* ── Padding-bottom กัน bottom nav ทับ content ── */
+  body { padding-bottom: 80px !important; }
 
-  /* ── N. ปุ่ม Pulse "Supabase ▪ 48s" มุมขวาล่าง ── */
-  /* ย้ายไปอยู่ขวาบน หรือซ่อน */
+  /* ── Supabase pulse indicator ── */
   .supabase-status,
-  .pulse-indicator,
-  [class*="supabase-pulse"] {
-    bottom: 80px !important; /* เหนือ bottom nav */
-    right: 16px !important;
+  [class*="supabase-pulse"],
+  [class*="supabase"][class*="indicator"] {
+    bottom: 86px !important;
+    right: 12px !important;
     font-size: 10px !important;
     padding: 4px 10px !important;
     z-index: 9980 !important;
   }
 
-  /* ── O. FAB ปรับตำแหน่งให้ไม่ทับ supabase-status ── */
+  /* ── FAB ── */
   .mobile-fab {
-    bottom: 110px !important; /* เหนือ pulse */
+    bottom: 118px !important;
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  /* ── ปุ่มในการ์ดต่าง ๆ (จัดเวรอัตโนมัติ/บันทึก/ล้าง/วันหยุดราชการ) ── */
+  /* ทำให้เป็น grid 2 cols เรียงสวย */
+  .schedule-action-grid,
+  [data-action-grid] {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .schedule-action-grid button,
+  [data-action-grid] button {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    padding: 10px 12px !important;
   }
 }
 
-/* ── Extra small (iPhone SE etc) ≤ 380px ── */
-@media (max-width: 380px) {
-  #scheduleTable th:nth-child(2),
-  #scheduleTable td:nth-child(2) {
-    width: 60px !important; min-width: 60px !important;
+/* ── Mobile bottom nav: button bigger, ชัด ── */
+@media (max-width: 1023px) {
+  .mobile-bottom-nav {
+    padding: 4px 4px 6px !important;
+    background: white !important;
+    border-top: 1px solid #e2e8f0 !important;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08) !important;
+    z-index: 9985 !important;
   }
-  #scheduleTable th:nth-child(2),
-  #scheduleTable td:nth-child(2) { left: 28px !important; }
-  #scheduleTable .position-badge { display: none !important; }
-  .app-header h1 { font-size: 15px !important; }
-  .toolbar button { font-size: 11px !important; padding: 5px 8px !important; }
+  .mobile-nav-btn {
+    min-height: 60px !important;
+    padding: 8px 4px !important;
+    gap: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #64748b !important;
+    font-weight: 600 !important;
+  }
+  .mobile-nav-btn.active,
+  .mobile-nav-btn[data-active="true"] {
+    color: #0284c7 !important;
+    background: #e0f2fe !important;
+    border-radius: 12px !important;
+  }
+  .mobile-nav-btn span {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+  }
+  .mobile-nav-btn i,
+  .mobile-nav-btn svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
 }

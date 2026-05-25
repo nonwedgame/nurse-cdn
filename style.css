@@ -3899,3 +3899,270 @@ button.notif-stat-chip.active {
   to { transform: rotate(360deg); }
 }
 
+
+
+/* ==================== MOBILE ENHANCEMENTS v1 ==================== */
+
+/* ── Sticky columns + header ในตารางเวร (mobile only) ── */
+@media (max-width: 1023px) {
+  .schedule-table-wrapper,
+  .table-scroll,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+  #scheduleTable {
+    border-collapse: separate !important;
+    border-spacing: 0;
+  }
+  #scheduleTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  #scheduleTable th:nth-child(1),
+  #scheduleTable td:nth-child(1) {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--cell-bg, white);
+    box-shadow: 1px 0 0 #e2e8f0;
+  }
+  #scheduleTable th:nth-child(2),
+  #scheduleTable td:nth-child(2) {
+    position: sticky;
+    left: 38px;
+    z-index: 3;
+    background: var(--cell-bg, white);
+    box-shadow: 1px 0 0 #e2e8f0;
+  }
+  #scheduleTable thead th:nth-child(1),
+  #scheduleTable thead th:nth-child(2) { z-index: 6; }
+
+  /* ขยาย touch target ของช่องเวร */
+  #scheduleTable td[data-nurse][data-day] {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px 4px !important;
+    font-size: 13px !important;
+  }
+
+  /* mobile bottom nav: เพิ่มขนาด */
+  .mobile-bottom-nav { padding: 6px 4px !important; }
+  .mobile-nav-btn {
+    min-height: 56px !important;
+    padding: 6px 4px !important;
+  }
+  .mobile-nav-btn span { font-size: 11px !important; font-weight: 600 !important; }
+  .mobile-nav-btn i,
+  .mobile-nav-btn svg { width: 22px !important; height: 22px !important; }
+}
+
+/* ── Bottom Sheet — Shift Picker ── */
+.mobile-shift-sheet-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 99998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  backdrop-filter: blur(2px);
+}
+.mobile-shift-sheet-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mobile-shift-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: white;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.25);
+  padding: 14px 18px 28px;
+  z-index: 99999;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.32,0.72,0.32,1);
+  max-height: 85vh;
+  overflow-y: auto;
+  font-family: 'Sarabun', system-ui, sans-serif;
+}
+.mobile-shift-sheet.open { transform: translateY(0); }
+.mss-handle {
+  width: 44px; height: 5px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  margin: 0 auto 14px;
+}
+.mss-header { text-align: center; margin-bottom: 18px; }
+.mss-title  { font-size: 19px; font-weight: 800; color: #0c4a6e; }
+.mss-subtitle {
+  font-size: 13px; color: #64748b; margin-top: 6px;
+  font-weight: 500;
+}
+.mss-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.mss-btn {
+  border: 2px solid transparent;
+  border-radius: 16px;
+  padding: 18px 8px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s, border-color 0.15s;
+  font-family: inherit;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+.mss-btn:active {
+  transform: scale(0.94);
+  border-color: #0c4a6e;
+  box-shadow: 0 4px 12px rgba(12, 74, 110, 0.25);
+}
+.mss-btn-code  { font-size: 22px; font-weight: 800; color: #0c4a6e; }
+.mss-btn-label { font-size: 12px; color: #475569; font-weight: 600; }
+.mss-btn-off { grid-column: span 1; opacity: 0.85; }
+
+.mss-leaves {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  flex-direction: column;
+}
+.mss-section-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  margin: 4px 0 4px;
+}
+.mss-leave-btn {
+  flex: 1;
+  border: 2px solid #fecaca;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #991b1b;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 50px;
+}
+.mss-leave-btn:active {
+  transform: scale(0.96);
+  background: #fee2e2 !important;
+}
+
+.mss-actions { display: flex; gap: 10px; margin-top: 6px; }
+.mss-action {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1.5px solid #cbd5e1;
+  background: white;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 50px;
+}
+.mss-action:active { transform: scale(0.97); }
+.mss-clear  { color: #dc2626; border-color: #fecaca; background: #fee2e2; }
+.mss-cancel { background: #f1f5f9; color: #475569; }
+
+/* ── FAB — Floating Action Button ── */
+.mobile-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 82px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0284c7, #0c4a6e);
+  border: none;
+  color: white;
+  font-size: 26px;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.45);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9990;
+  transition: transform 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+.mobile-fab:active {
+  transform: scale(0.9);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.5);
+}
+.mobile-fab:hover { box-shadow: 0 10px 28px rgba(2, 132, 199, 0.55); }
+
+/* ── Mobile Toast (swipe feedback) ── */
+.mobile-toast {
+  position: fixed;
+  bottom: 160px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(15, 23, 42, 0.92);
+  color: white;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+.mobile-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Hide all mobile-only elements on desktop ── */
+@media (min-width: 1024px) {
+  .mobile-fab,
+  .mobile-shift-sheet,
+  .mobile-shift-sheet-backdrop,
+  .mobile-toast {
+    display: none !important;
+  }
+}
+
+/* ── ปุ่ม + ฟอร์ม ขนาด touch-friendly ── */
+@media (max-width: 768px) {
+  button, .btn, input[type="button"], input[type="submit"] {
+    min-height: 44px;
+  }
+  input[type="text"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="email"],
+  select, textarea {
+    min-height: 44px;
+    font-size: 16px !important; /* กัน iOS auto-zoom */
+  }
+  /* numeric keypad on mobile */
+  input[inputmode="numeric"] { font-size: 18px !important; }
+}
+
+/* ── Dark mode สำหรับ mobile bottom sheet ── */
+@media (prefers-color-scheme: dark) {
+  .mobile-shift-sheet {
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  .mss-title { color: #7dd3fc; }
+  .mss-subtitle { color: #94a3b8; }
+  .mss-handle { background: #475569; }
+  .mss-btn-code  { color: #f1f5f9; }
+  .mss-btn-label { color: #cbd5e1; }
+  .mss-cancel { background: #334155; color: #f1f5f9; border-color: #475569; }
+}

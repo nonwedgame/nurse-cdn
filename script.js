@@ -14339,3 +14339,321 @@ window.onMonthChange = onMonthChange;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init, 400));
   else setTimeout(init, 400);
 })();
+
+
+/* ==================== MOBILE ENHANCEMENTS v1 ==================== */
+// Module: เสริม UX สำหรับโทรศัพท์
+//  A) Bottom Sheet เลือกเวร (tap cell → ปุ่มเวรใหญ่ ๆ)
+//  B) FAB (Floating Action Button) มุมขวาล่าง
+//  C) Sticky columns ในตาราง (จัดการที่ CSS)
+//  D) Swipe ซ้าย/ขวา = เปลี่ยนเดือน
+(function() {
+  'use strict';
+
+  const MQ_MOBILE = window.matchMedia('(max-width: 1023px)');
+  const isMobile = () => MQ_MOBILE.matches;
+  const vibrate  = (ms) => { try { navigator.vibrate?.(ms || 10); } catch(_) {} };
+
+  // ═══════════════════════════════════════════════════
+  //  A. BOTTOM SHEET — Shift Picker
+  // ═══════════════════════════════════════════════════
+  let sheetEl, backdropEl, activeNid, activeDay;
+
+  const COLORS = {
+    'ช':'#dbeafe','บ':'#fef3c7','ด':'#f3e8ff',
+    'ชบ':'#bfdbfe','ดบ':'#fde68a','ชด':'#e9d5ff',
+    'เย็น':'#fed7aa','OT':'#fecaca','O':'#f1f5f9',
+    'D12':'#bae6fd','N12':'#ddd6fe',
+  };
+  const LABELS = {
+    'ช':'เช้า','บ':'บ่าย','ด':'ดึก',
+    'ชบ':'เช้า+บ่าย','ดบ':'ดึก+บ่าย','ชด':'เช้า+ดึก',
+    'เย็น':'เวรเย็น','OT':'OT วันหยุด','O':'หยุด',
+    'D12':'กลางวัน 12','N12':'กลางคืน 12',
+  };
+
+  function ensureSheet() {
+    if (sheetEl) return;
+    backdropEl = document.createElement('div');
+    backdropEl.className = 'mobile-shift-sheet-backdrop';
+    backdropEl.addEventListener('click', closeSheet);
+    document.body.appendChild(backdropEl);
+
+    sheetEl = document.createElement('div');
+    sheetEl.className = 'mobile-shift-sheet';
+    sheetEl.innerHTML =
+      '<div class="mss-handle"></div>' +
+      '<div class="mss-header">' +
+        '<div class="mss-title">เลือกเวร</div>' +
+        '<div class="mss-subtitle" id="mssSubtitle"></div>' +
+      '</div>' +
+      '<div class="mss-buttons" id="mssButtons"></div>' +
+      '<div class="mss-leaves" id="mssLeaves"></div>' +
+      '<div class="mss-actions">' +
+        '<button class="mss-action mss-clear" type="button" id="mssClear">🗑 ลบเวร</button>' +
+        '<button class="mss-action mss-cancel" type="button" id="mssCancel">ยกเลิก</button>' +
+      '</div>';
+    document.body.appendChild(sheetEl);
+
+    sheetEl.querySelector('#mssCancel').addEventListener('click', closeSheet);
+    sheetEl.querySelector('#mssClear').addEventListener('click', () => {
+      vibrate(15); applyShift(''); closeSheet();
+    });
+  }
+
+  function openSheet(nid, d) {
+    ensureSheet();
+    activeNid = nid; activeDay = d;
+    const NS = window.NurseState; if (!NS?.state) return;
+    const state = NS.state;
+    const nurse = state.nurses.find(n => n.id === nid);
+    if (!nurse) return;
+
+    const mode = state.appSettings?.shiftMode || 1;
+    const SHIFT_MODES = window.NurseConst?.SHIFT_MODES || {};
+    const codes = (SHIFT_MODES[mode]?.paletteKeys || ['ช','บ','ด','O']).filter(c => c !== 'O');
+
+    sheetEl.querySelector('#mssSubtitle').textContent =
+      nurse.name + '  ·  วันที่ ' + d + '/' + state.month + '/' + state.year;
+
+    // Main shift buttons
+    const btnsEl = sheetEl.querySelector('#mssButtons');
+    btnsEl.innerHTML = '';
+    codes.forEach(c => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mss-btn';
+      btn.style.background = COLORS[c] || '#f1f5f9';
+      btn.innerHTML = '<div class="mss-btn-code">' + c + '</div>' +
+                      '<div class="mss-btn-label">' + (LABELS[c] || c) + '</div>';
+      btn.addEventListener('click', () => { vibrate(15); applyShift(c); closeSheet(); });
+      btnsEl.appendChild(btn);
+    });
+    // เพิ่มปุ่ม O (หยุด) ใหญ่ ๆ ด้วย
+    const oBtn = document.createElement('button');
+    oBtn.type = 'button';
+    oBtn.className = 'mss-btn mss-btn-off';
+    oBtn.style.background = '#f1f5f9';
+    oBtn.innerHTML = '<div class="mss-btn-code">O</div><div class="mss-btn-label">หยุด</div>';
+    oBtn.addEventListener('click', () => { vibrate(15); applyShift('O'); closeSheet(); });
+    btnsEl.appendChild(oBtn);
+
+    // Leave buttons (V/T)
+    const lvEl = sheetEl.querySelector('#mssLeaves');
+    lvEl.innerHTML = '<div class="mss-section-label">หรือบันทึกเป็นวันลา:</div>';
+    [['V','ลากิจ','#fecaca'], ['T','ลาป่วย','#fecaca']].forEach(([code, label, bg]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mss-leave-btn';
+      btn.style.background = bg;
+      btn.textContent = label + ' (' + code + ')';
+      btn.addEventListener('click', () => { vibrate(15); applyLeave(code); closeSheet(); });
+      lvEl.appendChild(btn);
+    });
+
+    requestAnimationFrame(() => {
+      backdropEl.classList.add('open');
+      sheetEl.classList.add('open');
+    });
+  }
+
+  function closeSheet() {
+    if (!sheetEl) return;
+    backdropEl.classList.remove('open');
+    sheetEl.classList.remove('open');
+  }
+
+  function applyShift(code) {
+    if (!activeNid || !activeDay) return;
+    const NS = window.NurseState, U = window.NurseUI;
+    if (NS?.isSystemLocked?.()) { U?.showError?.('🔒 ระบบล็อก'); return; }
+    if (NS.state.lockedShifts?.[activeNid + '-' + NS.state.year + '-' + NS.state.month + '-' + activeDay]) {
+      U?.showWarn?.('เซลล์นี้ถูกล็อก');
+      return;
+    }
+    if (NS.state.leaves?.[activeNid + '-' + NS.state.year + '-' + NS.state.month + '-' + activeDay] && code !== '') {
+      U?.showWarn?.('วันลาอยู่แล้ว — ต้องลบจากแท็บวันลาก่อน'); return;
+    }
+    window.NurseHistory?.pushHistory?.();
+    NS.setShift(activeNid, activeDay, code || null);
+    window.updateCell?.(activeNid, activeDay);
+    window.refreshStatsRow?.(activeNid);
+  }
+
+  function applyLeave(code) {
+    if (!activeNid || !activeDay) return;
+    const NS = window.NurseState, U = window.NurseUI;
+    if (NS?.isSystemLocked?.()) { U?.showError?.('🔒 ระบบล็อก'); return; }
+    window.NurseHistory?.pushHistory?.();
+    NS.setShift(activeNid, activeDay, null);
+    NS.setLeave?.(activeNid, activeDay, code);
+    window.updateCell?.(activeNid, activeDay);
+    window.refreshStatsRow?.(activeNid);
+    window.NurseRender?.renderLeaves?.();
+  }
+
+  function initShiftPicker() {
+    const tbl = document.getElementById('scheduleTable');
+    if (!tbl) return false;
+    // Capture phase เพื่อตัดก่อน handler เดิมทำงาน
+    tbl.addEventListener('click', e => {
+      if (!isMobile()) return;
+      const td = e.target.closest('td[data-nurse][data-day]');
+      if (!td) return;
+      // ถ้าอยู่ใน lockMode ปล่อยให้ flow เดิมทำงาน
+      if (window.NurseState?.state?.lockMode) return;
+      e.stopPropagation();
+      e.preventDefault();
+      openSheet(td.dataset.nurse, +td.dataset.day);
+    }, true);
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  B. FAB — Floating Action Button
+  // ═══════════════════════════════════════════════════
+  let fabEl;
+  function ensureFab() {
+    if (fabEl) return;
+    fabEl = document.createElement('button');
+    fabEl.type = 'button';
+    fabEl.className = 'mobile-fab';
+    fabEl.id = 'mobileFab';
+    fabEl.innerHTML = '<span id="mobileFabIcon">⚡</span>';
+    document.body.appendChild(fabEl);
+    fabEl.addEventListener('click', () => { vibrate(20); runFabAction(getCurrentTab()); });
+  }
+  function getCurrentTab() {
+    return document.querySelector('.mobile-nav-btn.active')?.dataset?.tab
+        || document.querySelector('.tab-btn.active')?.dataset?.tab
+        || 'dashboard';
+  }
+  function runFabAction(tab) {
+    const sel = {
+      'schedule': '#btnAutoSchedule, [data-action="auto-schedule"]',
+      'leaves':   '#btnAddLeave, [data-action="add-leave"]',
+      'ot':       '#btnSaveOT, #btnRefreshOT',
+      'settings': '#btnSaveSettings, [data-action="save-settings"]',
+      'print':    '#btnPrintMain, [data-action="print"]',
+    }[tab];
+    if (!sel) return;
+    const el = document.querySelector(sel);
+    if (el) el.click();
+  }
+  function updateFab() {
+    if (!fabEl) return;
+    const tab = getCurrentTab();
+    const config = {
+      'schedule': { icon: '🤖', label: 'จัดเวรอัตโนมัติ' },
+      'leaves':   { icon: '➕', label: 'เพิ่มวันลา' },
+      'ot':       { icon: '🔄', label: 'รีเฟรช OT' },
+      'settings': { icon: '💾', label: 'บันทึก' },
+      'print':    { icon: '🖨', label: 'พิมพ์' },
+    }[tab];
+    if (config && isMobile()) {
+      fabEl.style.display = 'flex';
+      fabEl.querySelector('#mobileFabIcon').textContent = config.icon;
+      fabEl.title = config.label;
+      fabEl.setAttribute('aria-label', config.label);
+    } else {
+      fabEl.style.display = 'none';
+    }
+  }
+  function initFab() {
+    ensureFab();
+    updateFab();
+    document.addEventListener('click', e => {
+      if (e.target.closest('.mobile-nav-btn, .tab-btn')) setTimeout(updateFab, 80);
+    });
+    MQ_MOBILE.addEventListener?.('change', updateFab);
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  D. SWIPE — Month change
+  // ═══════════════════════════════════════════════════
+  let touchStartX = 0, touchStartY = 0, touchEl = null, touchTime = 0;
+  function handleTouchStart(e) {
+    if (!isMobile()) return;
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartX = t.clientX; touchStartY = t.clientY; touchTime = Date.now();
+    // ตรวจว่าสัมผัสในพื้นที่ที่อนุญาต swipe
+    touchEl = e.target.closest('[data-tab-content="schedule"], [data-tab-content="calendar"], #tabContentSchedule, #tabContentCalendar, .schedule-pane, .calendar-pane');
+    if (!touchEl) {
+      // fallback: ถ้าอยู่ใน schedule tab ผ่าน active class
+      const activeTab = getCurrentTab();
+      if (['schedule','calendar','dashboard'].includes(activeTab)) {
+        touchEl = e.target.closest('body');
+      }
+    }
+  }
+  function handleTouchEnd(e) {
+    if (!isMobile() || !touchEl) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const dt = Date.now() - touchTime;
+    // ต้องเป็น swipe แนวนอน เร็วพอ และไม่อยู่ใน scrollable horizontal area (table)
+    if (Math.abs(dx) > 100 && Math.abs(dy) < 60 && dt < 600) {
+      if (e.target.closest('#scheduleTable, .table-scroll, .overflow-x-auto')) {
+        touchEl = null; return; // อยู่ในตาราง — ปล่อยให้ scroll
+      }
+      vibrate(10);
+      changeMonth(dx > 0 ? -1 : 1);
+    }
+    touchEl = null;
+  }
+  function changeMonth(delta) {
+    const s = window.NurseState?.state; if (!s) return;
+    let m = s.month + delta, y = s.year;
+    if (m < 1)  { m = 12; y--; }
+    if (m > 12) { m = 1;  y++; }
+    const mSel = document.getElementById('monthSelect');
+    const ySel = document.getElementById('yearSelect');
+    if (!mSel || !ySel) return;
+    mSel.value = m; ySel.value = y;
+    if (typeof window.onMonthChange === 'function') window.onMonthChange();
+    else mSel.dispatchEvent(new Event('change'));
+    showToast('📅 ' + (window.NurseConst?.THAI_MONTHS?.[m-1] || m) + ' ' + y);
+  }
+  function showToast(msg) {
+    let t = document.getElementById('mobileToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'mobileToast';
+      t.className = 'mobile-toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 1500);
+  }
+  function initSwipe() {
+    document.body.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.body.addEventListener('touchend',   handleTouchEnd,   { passive: true });
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  INIT (wait for app ready)
+  // ═══════════════════════════════════════════════════
+  function init() {
+    initShiftPicker();
+    initFab();
+    initSwipe();
+    console.log('[MobileEnhance] active, isMobile=' + isMobile());
+  }
+  function waitInit(tries) {
+    tries = tries || 0;
+    if (window.NurseState?.state && document.getElementById('scheduleTable')) { init(); return; }
+    if (tries > 60) { console.warn('[MobileEnhance] gave up waiting'); init(); return; }
+    setTimeout(() => waitInit(tries + 1), 500);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => waitInit());
+  } else {
+    waitInit();
+  }
+
+  window.NurseMobile = { isMobile, openSheet, closeSheet, updateFab, changeMonth };
+})();

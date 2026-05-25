@@ -10962,6 +10962,18 @@ function onMonthChange() {
   R.renderDashboard();
   R.renderCalendar();
   updateQuickHeadButtonsLabel();
+  // 🔧 ดึงข้อมูลเดือนใหม่จาก Supabase (pullAll โหลดทีละเดือนตาม year/month)
+  const cs = window.CloudStore;
+  if (cs?.pullAll) {
+    Promise.resolve(cs.pullAll(newYear, newMonth)).then(ok => {
+      if (state.year !== newYear || state.month !== newMonth) return;
+      invalidateStats();
+      R.renderSchedule();
+      R.renderLeaves();
+      R.renderDashboard();
+      R.renderCalendar();
+    }).catch(e => console.warn('onMonthChange pullAll:', e));
+  }
 }
 
 function updateQuickHeadButtonsLabel() {

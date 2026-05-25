@@ -2291,23 +2291,61 @@ window.NurseUI = {
     window.NurseState.invalidateStats();
   }
 
-  function autoScheduleCore() {
+  async function autoScheduleCore() {
     window.NurseHistory.pushHistory();
+    // 🔧 FIX: ก่อนสร้างใหม่ ให้ลบ schedule เดือนปัจจุบันใน Supabase
+    // (ป้องกัน rows เก่าค้างใน DB แล้ว realtime ดึงกลับมาซ้อนทับ)
+    // — ยกเว้น locked shifts (เก็บไว้)
+    const sb = window.CloudStore?.client;
+    if (sb) {
+      try {
+        // เก็บ key ที่ locked/custom ไว้
+        const prefix = `-${state.year}-${state.month}-`;
+        const keepNurseDay = [];
+        for (const key in state.schedule) {
+          if (!key.includes(prefix)) continue;
+          if (state.lockedShifts?.[key] || isCustomShiftCode(state.schedule[key])) {
+            const parts = key.split('-');
+            const day = parts[parts.length - 1];
+            const nid = parts.slice(0, parts.length - 3).join('-');
+            keepNurseDay.push({ nid, day: parseInt(day) });
+          }
+        }
+        let q = sb.from('schedule').delete().eq('year', state.year).eq('month', state.month);
+        // ถ้ามี locked/custom — ไม่ลบ keys เหล่านั้น
+        if (keepNurseDay.length === 0) {
+          await q;
+        } else {
+          // ลบทั้งหมดก่อน แล้ว setShift จะ re-upsert ของที่เหลือ + ที่ generate ใหม่
+          await q;
+        }
+      } catch (e) { console.warn('autoSchedule clear supabase:', e); }
+    }
+
     const mode = state.appSettings?.shiftMode || 1;
-    if (mode === 2) { autoScheduleMode2(); return; }
-    if (mode === 3) { autoScheduleMode3(); return; }
-    // Mode 1: standard 8-hr rotating
-    const ctx = prepareSchedulingContext();
-    mainFillPass(ctx);
-    distributeSpecialShifts(ctx);
-    autoFixAfternoonNight(ctx);
-    aggressiveFill(ctx);
-    emergencyCompoundFill(ctx);
-    fillRemainingWithO(ctx);
-    validateAndWarn(ctx);
-    enforceHeadsWeekdayOnly();
-    fillAllEmpty();
-    window.NurseState.invalidateStats();
+    if (mode === 2) { autoScheduleMode2(); }
+    else if (mode === 3) { autoScheduleMode3(); }
+    else {
+      // Mode 1: standard 8-hr rotating
+      const ctx = prepareSchedulingContext();
+      mainFillPass(ctx);
+      distributeSpecialShifts(ctx);
+      autoFixAfternoonNight(ctx);
+      aggressiveFill(ctx);
+      emergencyCompoundFill(ctx);
+      fillRemainingWithO(ctx);
+      validateAndWarn(ctx);
+      enforceHeadsWeekdayOnly();
+      fillAllEmpty();
+      window.NurseState.invalidateStats();
+    }
+
+    // Force push queue + pull ใหม่ ให้ state ตรงกับ DB จริง
+    try {
+      await window.CloudStore?.pushAll?.();
+      // รอสักครู่ให้ realtime settle แล้วค่อย pull
+      setTimeout(() => { window.CloudStore?.pullAll?.(); }, 1500);
+    } catch (_) {}
   }
 
   window.NurseScheduler = {
@@ -10535,9 +10573,9 @@ function runAutoSchedule() {
   U.confirmAct('จัดเวรอัตโนมัติ?', 'ระบบจะล้างตารางเวรเดิม แต่จะไม่แตะเซลล์ที่ล็อกไว้ (วันลายังคงอยู่)\nคุณสามารถกด Undo (Ctrl+Z) เพื่อย้อนกลับได้').then(r => {
     if (!r.isConfirmed) return;
     U.showLoading('กำลังจัดเวรอัตโนมัติ...');
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        window.NurseScheduler.autoScheduleCore();
+        await window.NurseScheduler.autoScheduleCore();
         window.NurseState.takeSnapshot("บันทึกอัตโนมัติ (AI จัดเวร)");
         window.NurseSettings?.renderTimeMachine?.();
         Swal.close();

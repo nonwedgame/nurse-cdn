@@ -11853,6 +11853,20 @@ window.onMonthChange = onMonthChange;
     return state().nurses.find(n => n.id === p.nurseId);
   }
 
+  async function syncPairedUser(chatId) {
+    const sb = window.CloudStore?.client;
+    const p = runtime.paired[chatId];
+    if (!sb || !p) return;
+    const { error } = await sb.from('paired_users').upsert({
+      chat_id: String(chatId),
+      nurse_id: p.nurseId || null,
+      nurse_name: p.nurseName || p.name || '',
+      is_admin: !!p.isAdmin,
+      paired_at: p.pairedAt ? new Date(p.pairedAt).toISOString() : new Date().toISOString(),
+    }, { onConflict: 'chat_id' });
+    if (error) throw error;
+  }
+
   function fmtShiftCode(code) {
     const names = { 'ช':'☀️ เช้า', 'บ':'🌆 บ่าย', 'ด':'🌙 ดึก', 'ชบ':'☀️🌆 เช้า+บ่าย', 'ดบ':'🌙🌆 ดึก+บ่าย', 'ชด':'☀️🌙 เช้า+ดึก', 'O':'😴 หยุด', 'V':'🟣 ลา', 'T':'🔴 ลาป่วย' };
     return names[code] || code;
@@ -12227,8 +12241,10 @@ window.onMonthChange = onMonthChange;
     if (existing) {
       return sendMessage(chatId, `${header()}\n\n⚠️ ชื่อนี้ถูกผูกกับบัญชี Telegram อื่นแล้ว\nกรุณาติดต่อผู้ดูแลระบบ`);
     }
-    runtime.paired[chatId] = { nurseId: nurse.id, name: nurse.name, chatId, pairedAt: Date.now() };
+    const previous = runtime.paired[chatId] || {};
+    runtime.paired[chatId] = { nurseId: nurse.id, name: nurse.name, chatId, pairedAt: previous.pairedAt || Date.now(), isAdmin: !!previous.isAdmin };
     saveState(); renderPairedUsers();
+    syncPairedUser(chatId).catch(e => activityLog('err', `sync paired: ${e.message}`));
     activityLog('cmd', `🔗 ผูก ${nurse.name} ← chat ${chatId}`);
     window.NurseNotify?.add('success', '🔗 ผูกบัญชีใหม่', `${nurse.name} (Telegram ${chatId})`);
     return sendMessage(chatId, `${header()}\n\n✅ <b>ผูกบัญชีสำเร็จ!</b>\n\n👤 <b>${escHtml(nurse.name)}</b>\n📋 ${escHtml(nurse.position || '')}\n\nตอนนี้คุณสามารถใช้ /myshifts เพื่อดูเวรของตัวเองได้แล้ว 🎉`,
@@ -12381,6 +12397,7 @@ window.onMonthChange = onMonthChange;
     if (!runtime.paired[target]) return sendMessage(chatId, `❌ ไม่พบบัญชีที่ผูกกับ Chat ID นี้`);
     runtime.paired[target].isAdmin = true;
     saveState(); renderPairedUsers();
+    syncPairedUser(target).catch(e => activityLog('err', `sync admin: ${e.message}`));
     activityLog('cmd', `👑 grant admin → ${runtime.paired[target].name}`);
     await sendMessage(target, `${header()}\n\n👑 <b>คุณได้รับสิทธิ์แอดมินแล้ว</b>\nพิมพ์ /admin เพื่อเข้าสู่เมนูแอดมิน`);
     return sendMessage(chatId, `✅ ให้สิทธิ์แอดมินกับ ${runtime.paired[target].name} แล้ว`);
@@ -14293,12 +14310,7 @@ window.onMonthChange = onMonthChange;
     if (!res.isConfirmed) return;
     p.isAdmin = true; saveState(); renderPairedUsers();
     activityLog('cmd', `👑 makeAdmin → ${p.name}`);
-    // ซิงค์ไป Supabase paired_users.is_admin
-    const sb = window.CloudStore?.client;
-    if (sb) {
-      const { error } = await sb.from('paired_users').update({ is_admin: true }).eq('chat_id', cid);
-      if (error) activityLog('err', `sync admin: ${error.message}`);
-    }
+    await syncPairedUser(cid).catch(e => activityLog('err', `sync admin: ${e.message}`));
     try { await sendMessage(cid, `${header()}\n\n👑 <b>คุณได้รับสิทธิ์แอดมินแล้ว</b>\nพิมพ์ /menu เพื่อดูเมนูใหม่`); } catch (_) {}
     window.NurseNotify?.add('success', `👑 ${p.name} เป็นแอดมินแล้ว`, '');
   }
@@ -14317,11 +14329,7 @@ window.onMonthChange = onMonthChange;
     if (!res.isConfirmed) return;
     p.isAdmin = false; saveState(); renderPairedUsers();
     activityLog('cmd', `👤 revokeAdmin → ${p.name}`);
-    const sb = window.CloudStore?.client;
-    if (sb) {
-      const { error } = await sb.from('paired_users').update({ is_admin: false }).eq('chat_id', cid);
-      if (error) activityLog('err', `sync admin: ${error.message}`);
-    }
+    await syncPairedUser(cid).catch(e => activityLog('err', `sync admin: ${e.message}`));
     try { await sendMessage(cid, `${header()}\n\nℹ️ สิทธิ์แอดมินของคุณถูกถอนแล้ว`); } catch (_) {}
     window.NurseNotify?.add('info', `👤 ถอนสิทธิ์ ${p.name} แล้ว`, '');
   }

@@ -11867,6 +11867,69 @@ window.onMonthChange = onMonthChange;
     holidayName: window.NurseHolidays?.getHolidayName || (() => ''),
   });
 
+  function activeShiftCodes(includeLeave = false) {
+    const s = state();
+    const mode = Number(s?.appSettings?.shiftMode || 1);
+    const base = mode === 2
+      ? ['ช', 'เย็น', 'OT']
+      : mode === 3
+        ? ['D12', 'N12']
+        : ['ช', 'บ', 'ด', 'ชบ', 'ดบ', 'ชด'];
+    const custom = (s?.appSettings?.customShifts || []).map(x => x?.code).filter(Boolean);
+    const extra = includeLeave ? ['O', 'V', 'T'] : [];
+    return Array.from(new Set([...base, ...custom, ...extra]));
+  }
+
+  function countShiftRows(rows, includeLeave = false) {
+    const count = Object.fromEntries(activeShiftCodes(includeLeave).map(code => [code, 0]));
+    rows.forEach(code => {
+      if (code && count[code] !== undefined) count[code]++;
+    });
+    return count;
+  }
+
+  function formatShiftCountLine(count, separator = '  ') {
+    return activeShiftCodes(false)
+      .map(code => `${escHtml(code)}=${count[code] || 0}`)
+      .join(separator);
+  }
+
+  function modeSummaryLine(st) {
+    const s = state();
+    const mode = Number(s?.appSettings?.shiftMode || 1);
+    if (mode === 2) {
+      return `ช:${st['ช'] || 0} เย็น:${st['เย็น'] || 0} OT:${st['OT'] || 0}`;
+    }
+    if (mode === 3) {
+      return `D12:${st['D12'] || 0} N12:${st['N12'] || 0}`;
+    }
+    return `ช:${st.chTotal || 0} บ:${st.baTotal || 0} ด:${st.duTotal || 0}`;
+  }
+
+  function currentShiftWindow(date = new Date()) {
+    const s = state();
+    const mode = Number(s?.appSettings?.shiftMode || 1);
+    const mins = date.getHours() * 60 + date.getMinutes();
+    if (mode === 2) {
+      if (mins >= 8 * 60 && mins < 16 * 60 + 30) return { codes: ['ช', 'OT'], label: '☀️ เวรกลางวัน/OT (08:00-16:30)' };
+      if (mins >= 16 * 60 + 30 && mins < 20 * 60 + 30) return { codes: ['เย็น'], label: '🌆 เวรเย็น (16:30-20:30)' };
+      return { codes: [], label: '🌙 นอกช่วงเวรหลักของโหมด 2' };
+    }
+    if (mode === 3) {
+      if (mins >= 8 * 60 && mins < 20 * 60) return { codes: ['D12'], label: '☀️ D12 (08:00-20:00)' };
+      return { codes: ['N12'], label: '🌙 N12 (20:00-08:00)' };
+    }
+    if (mins >= 8 * 60 && mins < 16 * 60) return { codes: ['ช'], label: '🌅 เช้า (08:00-16:00)' };
+    if (mins >= 16 * 60 && mins < 24 * 60) return { codes: ['บ'], label: '🌇 บ่าย (16:00-24:00)' };
+    return { codes: ['ด'], label: '🌙 ดึก (00:00-08:00)' };
+  }
+
+  function shiftMatchesAny(code, candidates) {
+    if (!code || !candidates.length) return false;
+    if (candidates.includes(code)) return true;
+    return candidates.some(c => ['ช', 'บ', 'ด'].includes(c) && code.includes(c));
+  }
+
   function getPairedNurse(chatId) {
     const p = runtime.paired[chatId];
     if (!p) return null;
@@ -11888,7 +11951,7 @@ window.onMonthChange = onMonthChange;
   }
 
   function fmtShiftCode(code) {
-    const names = { 'ช':'☀️ เช้า', 'บ':'🌆 บ่าย', 'ด':'🌙 ดึก', 'ชบ':'☀️🌆 เช้า+บ่าย', 'ดบ':'🌙🌆 ดึก+บ่าย', 'ชด':'☀️🌙 เช้า+ดึก', 'O':'😴 หยุด', 'V':'🟣 ลา', 'T':'🔴 ลาป่วย' };
+    const names = { 'ช':'☀️ เช้า', 'บ':'🌆 บ่าย', 'ด':'🌙 ดึก', 'ชบ':'☀️🌆 เช้า+บ่าย', 'ดบ':'🌙🌆 ดึก+บ่าย', 'ชด':'☀️🌙 เช้า+ดึก', 'เย็น':'🌆 เย็น', 'OT':'⏱️ OT วันหยุด', 'D12':'☀️ D12', 'N12':'🌙 N12', 'O':'😴 หยุด', 'V':'🟣 ลา', 'T':'🔴 ลาป่วย' };
     return names[code] || code;
   }
 
@@ -12073,16 +12136,12 @@ window.onMonthChange = onMonthChange;
     if (!s) return sendMessage(chatId, '❌ ระบบยังไม่พร้อม');
     const now = new Date();
     if (!isCurrentMonth(now)) return sendMessage(chatId, `${header()}\n\n📅 ตารางเดือนปัจจุบันไม่ตรงกับวันนี้`);
-    const hour = now.getHours();
-    let currentShift, label;
-    if (hour >= 8 && hour < 16)       { currentShift = 'ช'; label = '🌅 เช้า (08:00–16:00)'; }
-    else if (hour >= 16 && hour < 24) { currentShift = 'บ'; label = '🌇 บ่าย (16:00–24:00)'; }
-    else                              { currentShift = 'ด'; label = '🌙 ดึก (00:00–08:00)'; }
+    const { codes: currentShiftCodes, label } = currentShiftWindow(now);
     const d = now.getDate();
     const onDuty = [];
     s.nurses.filter(n => n.active !== false).forEach(n => {
       const c = h.getShift(n.id, d);
-      if (c && c.indexOf(currentShift) !== -1) onDuty.push(n.name);
+      if (shiftMatchesAny(c, currentShiftCodes)) onDuty.push(n.name);
     });
     let text = `${header()}\n\n👥 <b>เวรขณะนี้ (${d}/${s.month})</b>\n${label}\n\n`;
     if (!onDuty.length) text += '❌ <i>ไม่มีคนเข้าเวร</i>';
@@ -12097,20 +12156,20 @@ window.onMonthChange = onMonthChange;
     if (!nurse) return sendMessage(chatId, `${header()}\n\n⚠️ ต้องผูกบัญชีก่อน — /pair ชื่อ-นามสกุล`);
     const s = state(); const h = H();
     const days = h.daysInMonth(s.year, s.month);
-    const count = { 'ช':0,'บ':0,'ด':0,'ชบ':0,'ดบ':0,'ชด':0 };
+    const shifts = [];
     for (let d = 1; d <= days; d++) {
       const c = h.getShift(nurse.id, d);
-      if (c && count[c] !== undefined) count[c]++;
+      if (c) shifts.push(c);
     }
+    const count = countShiftRows(shifts);
     const codeArg = (args || '').trim();
     if (codeArg) {
-      if (count[codeArg] === undefined) return sendMessage(chatId, `${header()}\n\n❓ รหัสเวรไม่ถูกต้อง (ใช้: ช, บ, ด, ชบ, ดบ, ชด)`);
-      return sendMessage(chatId, `${header()}\n\n📊 <b>${escHtml(nurse.name)}</b> มีเวร <b>${codeArg}</b> = ${count[codeArg]} วัน (${s.month}/${s.year})`);
+      if (count[codeArg] === undefined) return sendMessage(chatId, `${header()}\n\n❓ รหัสเวรไม่ถูกต้องสำหรับโหมดนี้ (ใช้: ${activeShiftCodes(false).map(escHtml).join(', ')})`);
+      return sendMessage(chatId, `${header()}\n\n📊 <b>${escHtml(nurse.name)}</b> มีเวร <b>${escHtml(codeArg)}</b> = ${count[codeArg]} วัน (${s.month}/${s.year})`);
     }
     const total = Object.values(count).reduce((a,b)=>a+b,0);
     const text = `${header()}\n\n📊 <b>นับเวร — ${escHtml(nurse.name)}</b>\nเดือน ${s.month}/${s.year} (รวม ${total} วัน)\n\n` +
-      `🌅 ช = ${count['ช']}\n🌇 บ = ${count['บ']}\n🌙 ด = ${count['ด']}\n` +
-      `🌅🌇 ชบ = ${count['ชบ']}\n🌙🌇 ดบ = ${count['ดบ']}\n🌅🌙 ชด = ${count['ชด']}`;
+      activeShiftCodes(false).map(code => `${escHtml(fmtShiftCode(code))} = ${count[code] || 0}`).join('\n');
     return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
   }
 
@@ -12133,12 +12192,12 @@ window.onMonthChange = onMonthChange;
     const days = h.daysInMonth(y, m);
     const lines = [`${header()}\n\n📅 <b>สรุปเดือน ${m}/${y}</b>\n`];
     for (let d = 1; d <= days; d++) {
-      const c = { 'ช':0,'บ':0,'ด':0 };
+      const codes = [];
       s.nurses.filter(n => n.active !== false).forEach(n => {
         const code = h.getShift(n.id, d);
-        if (code) ['ช','บ','ด'].forEach(k => { if (code.indexOf(k) !== -1) c[k]++; });
+        if (code) codes.push(code);
       });
-      lines.push(`${d}: ช${c['ช']} บ${c['บ']} ด${c['ด']}`);
+      lines.push(`${d}: ${formatShiftCountLine(countShiftRows(codes), ' ')}`);
     }
     return sendMessage(chatId, lines.join('\n'), { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
   }
@@ -12217,7 +12276,7 @@ window.onMonthChange = onMonthChange;
     const days = h.daysInMonth(s.year, s.month);
     const st = h.computeNurseStats(nurse.id);
     let text = `${header()}\n\n👤 <b>${escHtml(nurse.name)}</b>\n📋 ${escHtml(nurse.position || '')}\n📅 เดือน ${s.month}/${s.year}\n\n`;
-    text += `📊 <b>สรุป:</b> รวม ${st.total||0} เวร (ช:${st.chTotal||0} บ:${st.baTotal||0} ด:${st.duTotal||0})\n\n`;
+    text += `📊 <b>สรุป:</b> รวม ${st.total||0} เวร (${modeSummaryLine(st)})\n\n`;
     text += `<b>ตารางเวร:</b>\n`;
     const lines = [];
     for (let d = 1; d <= days; d++) {
@@ -12240,7 +12299,7 @@ window.onMonthChange = onMonthChange;
     const medals = ['🥇','🥈','🥉'];
     ranked.slice(0, 10).forEach((r, i) => {
       const m = medals[i] || `${i+1}.`;
-      text += `${m} <b>${escHtml(r.n.name)}</b> — ${r.st.total||0} เวร\n   ช:${r.st.chTotal||0} บ:${r.st.baTotal||0} ด:${r.st.duTotal||0}\n`;
+      text += `${m} <b>${escHtml(r.n.name)}</b> — ${r.st.total||0} เวร\n   ${modeSummaryLine(r.st)}\n`;
     });
     if (ranked.length > 10) text += `\n<i>... และอีก ${ranked.length - 10} คน</i>`;
     return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
@@ -12352,7 +12411,7 @@ window.onMonthChange = onMonthChange;
     matches.forEach(n => {
       const st = h.computeNurseStats(n.id);
       const todayShift = todayDay ? (h.getShift(n.id, todayDay) || '-') : '-';
-      text += `👤 <b>${escHtml(n.name)}</b>\n📋 ${escHtml(n.position || '-')}\n📊 เวร: ${st.total||0} ครั้ง (ช:${st.chTotal||0} บ:${st.baTotal||0} ด:${st.duTotal||0})\n📅 วันนี้: ${escHtml(fmtShiftCode(todayShift))}\n\n`;
+      text += `👤 <b>${escHtml(n.name)}</b>\n📋 ${escHtml(n.position || '-')}\n📊 เวร: ${st.total||0} ครั้ง (${modeSummaryLine(st)})\n📅 วันนี้: ${escHtml(fmtShiftCode(todayShift))}\n\n`;
     });
     return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});
   }
@@ -12428,14 +12487,15 @@ window.onMonthChange = onMonthChange;
     if (!isAdmin(chatId)) return sendMessage(chatId, '🚫 ต้องเป็นแอดมินเท่านั้น');
     const s = state(); const h = H();
     const days = h.daysInMonth(s.year, s.month);
-    const code = { 'ช':0,'บ':0,'ด':0,'ชบ':0,'ดบ':0,'ชด':0 };
+    const shiftCodes = [];
     const activeNurses = s.nurses.filter(n => n.active !== false);
     activeNurses.forEach(n => {
       for (let d = 1; d <= days; d++) {
         const c = h.getShift(n.id, d);
-        if (c && code[c] !== undefined) code[c]++;
+        if (c) shiftCodes.push(c);
       }
     });
+    const code = countShiftRows(shiftCodes);
     const totalShifts = Object.values(code).reduce((a,b)=>a+b,0);
     const leaveByType = {}; let totalLeaves = 0;
     activeNurses.forEach(n => {
@@ -12449,8 +12509,7 @@ window.onMonthChange = onMonthChange;
     const text = `${header()}\n\n📊 <b>สถิติระบบ — ${s.month}/${s.year}</b>\n\n` +
       `👥 พยาบาล: <b>${activeNurses.length}</b> คน (${pairedCount} ผูก, ${adminCount} admin)\n` +
       `📅 เวรเดือนนี้: <b>${totalShifts}</b>\n` +
-      `  🌅 ช=${code['ช']}  🌇 บ=${code['บ']}  🌙 ด=${code['ด']}\n` +
-      `  ชบ=${code['ชบ']}  ดบ=${code['ดบ']}  ชด=${code['ชด']}\n\n` +
+      `  ${formatShiftCountLine(code)}\n\n` +
       `📋 วันลา: <b>${totalLeaves}</b>\n` +
       Object.keys(leaveByType).map(k => `  ${k} = ${leaveByType[k]}`).join('\n');
     return sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{text:'🏠 เมนู', callback_data:'cmd:menu'}]] }});

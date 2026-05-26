@@ -11686,6 +11686,26 @@ window.onMonthChange = onMonthChange;
     } catch {}
   }
 
+  function hydratePairedUsers(rows = []) {
+    const next = {};
+    rows.forEach(row => {
+      if (!row?.chat_id) return;
+      const cid = String(row.chat_id);
+      const previous = runtime.paired[cid] || {};
+      next[cid] = {
+        nurseId: row.nurse_id || previous.nurseId || '',
+        name: row.nurse_name || previous.name || '',
+        chatId: cid,
+        pairedAt: row.paired_at ? new Date(row.paired_at).getTime() : (previous.pairedAt || Date.now()),
+        isAdmin: row.is_admin === true || row.is_admin === 'true' || row.is_admin === 1 || row.is_admin === '1',
+      };
+    });
+    runtime.paired = next;
+    saveState();
+    renderPairedUsers();
+    renderStats();
+  }
+
   function trackCmd() {
     const today = new Date().toDateString();
     if (runtime.stats.dayKey !== today) { runtime.stats.cmdsToday = 0; runtime.stats.dayKey = today; }
@@ -14341,6 +14361,7 @@ window.onMonthChange = onMonthChange;
     makeAdmin, revokeAdmin,
     filterPaired, exportPaired, exportRequests,
     openBroadcast, openCustomize,
+    hydratePairedUsers,
     _state: runtime,
   };
 
